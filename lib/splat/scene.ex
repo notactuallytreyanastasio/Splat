@@ -24,18 +24,30 @@ defmodule Splat.Scene do
     }
   end
 
-  def handle_input({:click, :redraw_button}, _context, scene) do
-    IO.puts("Redraw button clicked! Generating new artwork...")
+  def handle_input({:cursor_button, {:btn_left, 0, [], {x, y}}}, _context, scene) do
+    # Check if click is within the button area (button is at top right)
+    button_center_x = @canvas_width - 30 - 20  # button_x + button_width/2
+    button_center_y = 20 + 30                  # button_y + button_height/2
     
-    # Create new artwork
-    graph = create_artwork_graph()
+    # Check if click is within button radius
+    distance = :math.sqrt(:math.pow(x - button_center_x, 2) + :math.pow(y - button_center_y, 2))
     
-    scene =
-      scene
-      |> assign(artwork: :regenerated)
-      |> push_graph(graph)
-    
-    {:noreply, scene}
+    if distance <= 25 do  # radius of our button
+      IO.puts("Redraw button clicked! Generating new artwork...")
+      
+      # Create new artwork
+      graph = create_artwork_graph()
+      
+      scene =
+        scene
+        |> assign(artwork: :regenerated)
+        |> push_graph(graph)
+      
+      {:noreply, scene}
+    else
+      IO.puts("Clicked outside button at #{x}, #{y}")
+      {:noreply, scene}
+    end
   end
 
   def handle_input(input, _context, scene) do
@@ -51,22 +63,27 @@ defmodule Splat.Scene do
   end
 
   defp add_redraw_button(graph) do
-    button_width = 100
-    button_height = 40
+    button_width = 60
+    button_height = 60
     button_x = @canvas_width - button_width - 20
     button_y = 20
     
+    # Create a circular button
+    center_x = button_x + button_width / 2
+    center_y = button_y + button_height / 2
+    radius = 25
+    
     graph
-    |> rect({button_width, button_height}, 
-             fill: {70, 130, 180}, 
-             stroke: {2, :black},
-             translate: {button_x, button_y},
-             input: [:cursor_button],
-             id: :redraw_button)
-    |> text("Redraw", 
-            fill: :white, 
-            font_size: 16,
-            translate: {button_x + 25, button_y + 25})
+    |> circle(radius, 
+              fill: {70, 130, 180}, 
+              stroke: {3, :black},
+              translate: {center_x, center_y},
+              input: [:cursor_button],
+              id: :redraw_button)
+    # Add a simple refresh symbol using lines
+    |> line({{center_x - 10, center_y - 5}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
+    |> line({{center_x + 5, center_y - 10}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
+    |> line({{center_x + 5, center_y}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
   end
 
   defp generate_artwork(graph) do
