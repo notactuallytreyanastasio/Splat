@@ -17,11 +17,13 @@ defmodule Splat.Scene do
 
     graph = create_artwork_graph()
 
-    {:ok,
-     scene
-     |> assign(artwork: :generated)
-     |> push_graph(graph)
-    }
+    scene =
+      scene
+      |> assign(artwork: :generated)
+      |> push_graph(graph)
+      |> request_input([:cursor_button])
+
+    {:ok, scene}
   end
 
   def handle_input({:cursor_button, {:btn_left, 0, [], {x, y}}}, _context, scene) do
@@ -206,13 +208,4 @@ defmodule Splat.Scene do
     Enum.random(colors)
   end
 
-  defp darken_color(:red), do: {139, 0, 0}
-  defp darken_color(:blue), do: {0, 0, 139}
-  defp darken_color(:green), do: {0, 100, 0}
-  defp darken_color(:purple), do: {75, 0, 130}
-  defp darken_color(:orange), do: {255, 69, 0}
-  defp darken_color(:pink), do: {199, 21, 133}
-  defp darken_color(:cyan), do: {0, 139, 139}
-  defp darken_color(:magenta), do: {139, 0, 139}
-  defp darken_color({r, g, b}), do: {div(r * 7, 10), div(g * 7, 10), div(b * 7, 10)}
 end
