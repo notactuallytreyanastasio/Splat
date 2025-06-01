@@ -6,48 +6,131 @@ defmodule Splat.Scene do
 
   @canvas_width 800
   @canvas_height 600
+  @tool_palette_width 60
 
   def init(scene, _param, _opts) do
-    # Seed random number generator for unique art each run
-    :rand.seed(:exsplus, {
-      :erlang.phash2(make_ref()),
-      :erlang.monotonic_time(),
-      :erlang.unique_integer()
-    })
-
-    graph = create_artwork_graph()
+    graph = create_canvas_graph()
 
     scene =
       scene
-      |> assign(artwork: :generated)
+      |> assign(drawing: false)
+      |> assign(draw_lines: [])
+      |> assign(current_line: [])
+      |> assign(selected_tool: :pencil)
       |> push_graph(graph)
-      |> request_input([:cursor_button])
+
+    request_input(scene, [:cursor_button, :cursor_pos])
 
     {:ok, scene}
   end
 
-  def handle_input({:cursor_button, {:btn_left, 0, [], {x, y}}}, _context, scene) do
-    # Check if click is within the button area (button is at top right)
-    button_center_x = @canvas_width - 30 - 20  # button_x + button_width/2
-    button_center_y = 20 + 30                  # button_y + button_height/2
-    
-    # Check if click is within button radius
-    distance = :math.sqrt(:math.pow(x - button_center_x, 2) + :math.pow(y - button_center_y, 2))
-    
-    if distance <= 25 do  # radius of our button
-      IO.puts("Redraw button clicked! Generating new artwork...")
+  # Handle mouse button press (start drawing or tool selection)
+  def handle_input({:cursor_button, {:btn_left, 1, [], {x, y}}}, _context, scene) do
+    cond do
+      # Check if click is in tool palette area
+      x < @tool_palette_width ->
+        handle_tool_selection(x, y, scene)
       
-      # Create new artwork
-      graph = create_artwork_graph()
+      # Click is in canvas area - start drawing
+      x >= @tool_palette_width ->
+        IO.puts("Started drawing at #{x}, #{y}")
+        scene =
+          scene
+          |> assign(drawing: true)
+          |> assign(current_line: [{x, y}])
+        
+        {:noreply, scene}
+      
+      true ->
+        {:noreply, scene}
+    end
+  end
+
+  defp handle_tool_selection(x, y, scene) do
+    cond do
+      # Pencil tool area (5-55 x, 10-60 y)
+      x >= 5 and x <= 55 and y >= 10 and y <= 60 ->
+        IO.puts("Pencil tool selected")
+        graph = create_canvas_graph() 
+                |> add_drawn_lines(scene.assigns.draw_lines)
+                |> highlight_selected_tool(:pencil)
+        
+        scene =
+          scene
+          |> assign(selected_tool: :pencil)
+          |> push_graph(graph)
+        
+        {:noreply, scene}
+      
+      # Eraser tool area (5-55 x, 70-120 y)
+      x >= 5 and x <= 55 and y >= 70 and y <= 120 ->
+        IO.puts("Eraser tool selected")
+        graph = create_canvas_graph()
+                |> add_drawn_lines(scene.assigns.draw_lines)
+                |> highlight_selected_tool(:eraser)
+        
+        scene =
+          scene
+          |> assign(selected_tool: :eraser)
+          |> push_graph(graph)
+        
+        {:noreply, scene}
+      
+      true ->
+        {:noreply, scene}
+    end
+  end
+
+  defp highlight_selected_tool(graph, selected_tool) do
+    # For now, just return the graph as-is
+    # The highlighting is handled in add_tool_palette based on the selected tool
+    graph
+  end
+
+  # Handle mouse button release (stop drawing)
+  def handle_input({:cursor_button, {:btn_left, 0, [], {x, y}}}, _context, scene) do
+    if scene.assigns.drawing do
+      IO.puts("Stopped drawing at #{x}, #{y}")
+      
+      # Add final point and save the completed line with tool info
+      current_line = scene.assigns.current_line ++ [{x, y}]
+      line_with_tool = {current_line, scene.assigns.selected_tool}
+      draw_lines = scene.assigns.draw_lines ++ [line_with_tool]
+      
+      # Update graph with all drawn lines
+      graph = create_canvas_graph() |> add_drawn_lines(draw_lines)
       
       scene =
         scene
-        |> assign(artwork: :regenerated)
+        |> assign(drawing: false)
+        |> assign(current_line: [])
+        |> assign(draw_lines: draw_lines)
         |> push_graph(graph)
       
       {:noreply, scene}
     else
-      IO.puts("Clicked outside button at #{x}, #{y}")
+      {:noreply, scene}
+    end
+  end
+
+  # Handle cursor movement (draw while dragging)
+  def handle_input({:cursor_pos, {x, y}}, _context, scene) do
+    if scene.assigns.drawing do
+      # Add point to current line
+      current_line = scene.assigns.current_line ++ [{x, y}]
+      
+      # Update graph with current drawing
+      current_line_with_tool = {current_line, scene.assigns.selected_tool}
+      all_lines = scene.assigns.draw_lines ++ [current_line_with_tool]
+      graph = create_canvas_graph() |> add_drawn_lines(all_lines)
+      
+      scene =
+        scene
+        |> assign(current_line: current_line)
+        |> push_graph(graph)
+      
+      {:noreply, scene}
+    else
       {:noreply, scene}
     end
   end
@@ -57,155 +140,76 @@ defmodule Splat.Scene do
     {:noreply, scene}
   end
 
-  defp create_artwork_graph() do
+  defp create_canvas_graph() do
     Graph.build()
-    |> rect({@canvas_width, @canvas_height}, fill: :white, stroke: {1, :black})
-    |> generate_artwork()
-    |> add_redraw_button()
+    |> add_tool_palette()
+    |> add_canvas()
+    |> highlight_selected_tool(:pencil)
   end
 
-  defp add_redraw_button(graph) do
-    button_width = 60
-    button_height = 60
-    button_x = @canvas_width - button_width - 20
-    button_y = 20
+  defp add_tool_palette(graph) do
+    # Tool palette background
+    graph = rect(graph, {@tool_palette_width, @canvas_height}, 
+                 fill: {220, 220, 220}, stroke: {1, :black}, translate: {0, 0})
     
-    # Create a circular button
-    center_x = button_x + button_width / 2
-    center_y = button_y + button_height / 2
-    radius = 25
+    # Pencil tool (selected by default)
+    graph = rect(graph, {50, 50}, 
+                 fill: {180, 180, 255}, stroke: {2, :blue}, 
+                 translate: {5, 10}, id: :pencil_tool)
     
-    graph
-    |> circle(radius, 
-              fill: {70, 130, 180}, 
-              stroke: {3, :black},
-              translate: {center_x, center_y},
-              input: [:cursor_button],
-              id: :redraw_button)
-    # Add a simple refresh symbol using lines
-    |> line({{center_x - 10, center_y - 5}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
-    |> line({{center_x + 5, center_y - 10}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
-    |> line({{center_x + 5, center_y}, {center_x + 10, center_y - 5}}, stroke: {3, :white})
+    # Simple pencil icon using lines
+    graph = line(graph, {{20, 25}, {35, 40}}, stroke: {2, :black})
+    graph = line(graph, {{20, 25}, {25, 20}}, stroke: {2, :black})
+    graph = line(graph, {{25, 20}, {30, 25}}, stroke: {2, :black})
+    graph = line(graph, {{30, 25}, {35, 40}}, stroke: {2, :black})
+    
+    # Eraser tool
+    graph = rect(graph, {50, 50}, 
+                 fill: {240, 240, 240}, stroke: {1, :gray}, 
+                 translate: {5, 70}, id: :eraser_tool)
+    
+    # Simple eraser icon
+    rect(graph, {20, 15}, fill: {255, 192, 203}, stroke: {1, :black}, translate: {20, 82})
   end
 
-  defp generate_artwork(graph) do
-    # Generate 5-8 random bezier curves
-    num_curves = Enum.random(5..8)
-    
-    Enum.reduce(1..num_curves, graph, fn _i, acc_graph ->
-      acc_graph
-      |> draw_random_bezier_with_triangles()
+  defp add_canvas(graph) do
+    # Drawing canvas
+    rect(graph, {@canvas_width - @tool_palette_width, @canvas_height}, 
+         fill: :white, stroke: {1, :black}, translate: {@tool_palette_width, 0})
+  end
+
+  defp add_drawn_lines(graph, []), do: graph
+  defp add_drawn_lines(graph, lines) do
+    Enum.reduce(lines, graph, fn line_with_tool, acc_graph ->
+      draw_line_from_points(acc_graph, line_with_tool)
     end)
   end
 
-  defp draw_random_bezier_with_triangles(graph) do
-    # Generate random bezier curve points
-    start_x = Enum.random(50..(@canvas_width - 50))
-    start_y = Enum.random(100..(@canvas_height - 100))
+  defp draw_line_from_points(graph, []), do: graph
+  defp draw_line_from_points(graph, [_single_point]), do: graph
+  defp draw_line_from_points(graph, {points, tool}) when length(points) >= 2 do
+    # Get color based on tool
+    color = case tool do
+      :pencil -> :black
+      :eraser -> :white
+      _ -> :black
+    end
     
-    end_x = Enum.random(50..(@canvas_width - 50))
-    end_y = Enum.random(100..(@canvas_height - 100))
-    
-    # Control points for the bezier curve
-    cp1_x = start_x + Enum.random(-200..200)
-    cp1_y = start_y + Enum.random(-150..150)
-    
-    cp2_x = end_x + Enum.random(-200..200)
-    cp2_y = end_y + Enum.random(-150..150)
-    
-    # Random color for this curve and its triangles
-    color = random_color()
-    stroke_width = Enum.random(2..4)
-    
-    # Draw the bezier curve
-    bezier_path = [
-      {:move_to, start_x, start_y},
-      {:bezier_to, cp1_x, cp1_y, cp2_x, cp2_y, end_x, end_y}
-    ]
-    
-    graph = path(graph, bezier_path, stroke: {stroke_width, color})
-    
-    # Add triangles along the curve
-    num_triangles = Enum.random(3..7)
-    
-    Enum.reduce(1..num_triangles, graph, fn i, acc_graph ->
-      # Calculate position along the curve (0.0 to 1.0)
-      t = i / (num_triangles + 1)
-      
-      # Calculate point on bezier curve using the bezier formula
-      {x, y} = bezier_point(
-        {start_x, start_y},
-        {cp1_x, cp1_y}, 
-        {cp2_x, cp2_y},
-        {end_x, end_y},
-        t
-      )
-      
-      # Draw triangle at this point
-      triangle_size = Enum.random(15..30)
-      draw_triangle_at_point(acc_graph, x, y, triangle_size, color)
+    # Draw lines connecting consecutive points
+    points
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.reduce(graph, fn [{x1, y1}, {x2, y2}], acc_graph ->
+      line(acc_graph, {{x1, y1}, {x2, y2}}, stroke: {3, color})
+    end)
+  end
+  defp draw_line_from_points(graph, points) when is_list(points) and length(points) >= 2 do
+    # Fallback for lines without tool info (legacy support)
+    points
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.reduce(graph, fn [{x1, y1}, {x2, y2}], acc_graph ->
+      line(acc_graph, {{x1, y1}, {x2, y2}}, stroke: {3, :black})
     end)
   end
 
-  defp bezier_point({x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}, t) do
-    # Cubic bezier curve formula
-    one_minus_t = 1.0 - t
-    one_minus_t_squared = one_minus_t * one_minus_t
-    one_minus_t_cubed = one_minus_t_squared * one_minus_t
-    t_squared = t * t
-    t_cubed = t_squared * t
-    
-    x = one_minus_t_cubed * x0 + 
-        3 * one_minus_t_squared * t * x1 + 
-        3 * one_minus_t * t_squared * x2 + 
-        t_cubed * x3
-        
-    y = one_minus_t_cubed * y0 + 
-        3 * one_minus_t_squared * t * y1 + 
-        3 * one_minus_t * t_squared * y2 + 
-        t_cubed * y3
-        
-    {x, y}
-  end
-
-  defp draw_triangle_at_point(graph, center_x, center_y, size, color) do
-    # Calculate triangle vertices around the center point
-    half_size = size / 2
-    height = size * 0.866  # sqrt(3)/2 for equilateral triangle
-    
-    # Random rotation for visual interest
-    rotation = Enum.random(0..360) * :math.pi() / 180
-    
-    # Triangle points (before rotation)
-    points = [
-      {0, -height * 2/3},           # Top
-      {-half_size, height * 1/3},   # Bottom left  
-      {half_size, height * 1/3}     # Bottom right
-    ]
-    
-    # Rotate and translate points
-    rotated_points = Enum.map(points, fn {x, y} ->
-      rotated_x = x * :math.cos(rotation) - y * :math.sin(rotation)
-      rotated_y = x * :math.sin(rotation) + y * :math.cos(rotation)
-      {center_x + rotated_x, center_y + rotated_y}
-    end)
-    
-    # Draw the triangle using three lines (like our Sierpinski triangles)
-    [{x1, y1}, {x2, y2}, {x3, y3}] = rotated_points
-    
-    graph
-    |> line({{x1, y1}, {x2, y2}}, stroke: {2, color})
-    |> line({{x2, y2}, {x3, y3}}, stroke: {2, color})
-    |> line({{x3, y3}, {x1, y1}}, stroke: {2, color})
-  end
-
-  defp random_color() do
-    colors = [
-      :red, :blue, :green, :purple, :orange, :pink, :cyan, :magenta,
-      {200, 100, 50}, {50, 150, 200}, {150, 50, 150}, {100, 200, 100},
-      {255, 140, 0}, {70, 130, 180}, {147, 112, 219}, {60, 179, 113}
-    ]
-    Enum.random(colors)
-  end
 
 end
