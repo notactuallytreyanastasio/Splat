@@ -70,19 +70,24 @@ export class Sfx {
       v.end = now; // it no longer counts toward its group
     }
     // A pile-up of one group grows by about 3 dB per doubling of voices instead of 6 to 10:
-    // the n-th overlapping gore voice plays at 1/sqrt(n).
+    // a gore voice plays at 1/sqrt(1 + n), n being the gore voices from earlier events still
+    // ringing. Voices started within 10 ms of each other are one event (a kill is a hit, a
+    // squish and a squeak in the same frame) and do not duck each other, or every ordinary
+    // kill would play its squish 3 dB and its squeak 5 dB under their measured level.
     let pile = 1;
     if (mix.group) {
       const gl = (this.groups[mix.group] ??= []);
       for (let i = gl.length - 1; i >= 0; i--) if (gl[i].end <= now) gl.splice(i, 1);
-      pile = 1 / Math.sqrt(1 + gl.length);
+      let n = 0;
+      for (const v of gl) if (now - v.t0 > 0.01) n++;
+      pile = 1 / Math.sqrt(1 + n);
     }
     const g = this.ctx.createGain();
     g.gain.value = Math.pow(10, (mix.db ?? 0) / 20) * pile;
     g.connect(this.sfxBus);
     this.voice = g; this.voiceEnd = now;
     try { recipe(this, now, opts); } finally { this.voice = null; }
-    const v = { g, end: this.voiceEnd };
+    const v = { g, t0: now, end: this.voiceEnd };
     list.push(v);
     if (mix.group) this.groups[mix.group].push(v);
     if (mix.duck) this.duck(...mix.duck, now);

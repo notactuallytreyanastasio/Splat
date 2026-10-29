@@ -125,6 +125,18 @@ const result = await tab.evaluate(async base => {
     const [name, o] = Array.isArray(c) ? c : [label, c];
     out.sounds[label] = await render(2.6, s => fire(s, name, 0.05, o));
   }
+  // One ordinary kill, as killFx plays it: the killing blow's hit, then squish and squeak in
+  // the same frame. Each part is metered with the others present (by muting the rest), so a
+  // pile-up rule that attenuates sounds of one event against each other shows up here.
+  const KILL = [['hit', { pitch: 1 }], ['squish', {}], ['squeak', { pitch: 1 }]];
+  for (const [part] of KILL) {
+    out.sounds['kill: ' + part] = await render(2.6, s => {
+      for (const [name, o] of KILL) {
+        fire(s, name, 0.05, o);
+        if (name !== part && s.voices?.[name]?.length) s.voices[name].at(-1).g.gain.value = 0;
+      }
+    });
+  }
   // A pile-up: a blender pass through a crowd. 24 kills in 0.4 s, each a hit, squish,
   // squeak and splat, as fast as the game can fire them.
   out.stress = await render(2, s => {
