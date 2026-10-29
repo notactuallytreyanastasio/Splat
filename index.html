@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#ffe9f6">
@@ -94,7 +94,10 @@
   .boons.live { background: transparent; backdrop-filter: none; pointer-events: none; place-content: end center; padding-bottom: 150px; }
   .boons.live h1 { font-size: 30px; } .boons.live button { pointer-events: auto; width: 170px; padding: 10px; } .boons.live .icon { font-size: 30px; }
   .lobby { position: absolute; inset: 0; display: grid; place-content: center; font-size: 26px; font-weight: 700; text-align: center; }
-  html, body { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  /* manipulation, not none, on the page: pinch must stay possible so an accidental zoom
+     can be undone. The canvas and the controls take every gesture for the game. */
+  html, body { touch-action: manipulation; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  #game, #game canvas, .touch .tb { touch-action: none; }
   /* Sizes scale with the screen so a phone, an unfolded Duo and a desktop all fit. */
   .orb { width: clamp(64px, 14vmin, 118px); height: clamp(64px, 14vmin, 118px); border-width: clamp(4px, .8vmin, 6px); }
   .orb span { font-size: clamp(18px, 3.6vmin, 30px); }
@@ -104,6 +107,7 @@
   .end .stats { grid-template-columns: repeat(auto-fit, minmax(118px, 150px)); max-width: 92vw; }
   .end .again { font: 700 22px Fredoka, system-ui; padding: 10px 26px; border: 5px solid var(--ink); border-radius: 18px; background: var(--pink); color: #fff; box-shadow: 0 6px 0 var(--ink); }
   .touch { display: none; }
+  body.touching:not(.playing) .touch { display: none; }
   body.touching .touch { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
   body.touching .help, body.touching .title .keys { display: none; }
   body.touching .title::after { content: 'left thumb: move anywhere · right thumb: buttons (drag SLASH to aim)'; font-weight: 700; margin-top: 10px; }

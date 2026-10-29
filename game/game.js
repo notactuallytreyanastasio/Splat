@@ -100,7 +100,11 @@ export class Game {
     if (this.started) this.begin();
     else this.hud.title(() => { this.sfx.unlock(); this.started = true; this.begin(); }, this.net);
   }
-  begin() { if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
+  begin() {
+    document.body.classList.add('playing');
+    // iOS keeps any accidental zoom; re-asserting the viewport snaps it back to 1.
+    const vp = document.querySelector('meta[name=viewport]');
+    if (vp) { const c = vp.content; vp.content = c + ', maximum-scale=1'; setTimeout(() => { vp.content = c; }, 50); } if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
   get players() { return [this.player, ...(this.coop?.remotes.values() ?? [])].filter(p => !p.dead); }
   nearestPlayer(x, z) {
     let best = null, bd = Infinity;

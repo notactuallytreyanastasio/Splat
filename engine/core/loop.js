@@ -18,7 +18,9 @@ export class Loop {
     this.last = performance.now();
     const tick = now => {
       if (!this.running) return;
-      const dt = Math.min((now - this.last) / 1000, 0.1) * this.speed;
+      // Clamp both ways: a backgrounded tab can hand rAF a timestamp older than the
+      // start time, and an unclamped negative dt buries the accumulator for seconds.
+      const dt = Math.max(0, Math.min((now - this.last) / 1000, 0.1)) * this.speed;
       this.last = now;
       this.acc += dt;
       let steps = 0;
