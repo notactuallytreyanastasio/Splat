@@ -75,7 +75,7 @@ const STEPS = [
     touch: () => `${C('BONK')} is a heavy swing. Bonk one bug into another: anything knocked fast enough is a projectile.`,
     start: t => t.lineUp(),
     tick: t => { if (t.alive().length < 2) t.lineUp(); },
-    got: t => t.c.impacts - t.base.impacts,
+    got: t => t.n.bonks - t.base.bonks,
   },
   {
     title: 'Grab and throw', icon: 'grab', need: 1,
@@ -123,10 +123,19 @@ export class Tutorial {
     const g = json.marks?.goal ?? [room.center.x + 6, room.center.z];
     this.goal = { x: g[0], z: g[1] };
     this.mine = new Set();
-    this.n = { ladybugKills: 0, finishers: 0, rolls: 0 };
+    this.n = { ladybugKills: 0, finishers: 0, rolls: 0, bonks: 0 };
+    this.heavyT = -9;
     this.i = -1; this.phase = 'intro';
     game.events.on('kill', ({ target }) => { if (this.mine.has(target) && target.type === 'ladybug') this.n.ladybugKills++; });
-    game.events.on('hit', ({ target, info }) => { if (info.kind === 'finisher' && target instanceof Enemy) this.n.finishers++; });
+    game.events.on('hit', ({ target, info }) => {
+      if (!(target instanceof Enemy)) return;
+      const t = game.time;
+      if (info.kind === 'finisher') this.n.finishers++;
+      if (info.kind === 'heavy') target.tutHeavyT = t;
+      // Batter up: an impact on a bug soon after a heavy swing, and not on the bug that was
+      // swung at (the mover takes impact damage too). A finisher into a bug does not count.
+      if (info.kind === 'impact' && t - this.heavyT < 2 && !(t - (target.tutHeavyT ?? -9) < 2)) this.n.bonks++;
+    });
     document.body.classList.add('tutorial');
     this.root = document.getElementById('hud').appendChild(document.createElement('div'));
     this.root.className = 'tut';
@@ -317,6 +326,7 @@ export class Tutorial {
     // You cannot pop in practice: a floor under the health, and it creeps back up.
     p.hp = Math.min(p.stats.maxHp, Math.max(35, p.hp + dt * 6));
     if (p.state === 'dodge' && this.lastState !== 'dodge') this.n.rolls++;
+    if (p.state === 'heavy' && this.lastState !== 'heavy') this.heavyT = g.time;
     this.lastState = p.state;
     if (this.rageFill) {
       p.rage = Math.min(100, p.rage + dt * 140);
