@@ -180,8 +180,8 @@ export class Game {
       case 'potion': this.player.potions = Math.min(5, this.player.potions + 1); this.sfx.play('pickup', { pitch: 0.7 }); return;
       case 'tp': this.player.x = d.x; this.player.z = d.z; this.player.vx = this.player.vz = 0; return;
       case 'rez': return this.revive(d.x, d.z);
-      case 'win': return this.win();
-      case 'lose': return this.lose();
+      case 'win': return this.win(d);
+      case 'lose': return this.lose(d);
       case 'restart': return this.restart(false, d.seed);
       case 'parried': return this.parriedFx(d);
       case 'arm': { const e = this.world.byId.get(d.id); if (e) e.armed = true; return; }
@@ -309,7 +309,7 @@ export class Game {
     // The fallen get back up when the room is won.
     const alive = this.players.find(k => !k.ghost);
     for (const k of this.players) if (k.ghost && alive) this.fx('rez', { to: k.pid, x: alive.x + 0.8, z: alive.z });
-    if (room.boss) { this.fx('win', {}); return; }
+    if (room.boss) { this.fx('win', this.squadStats()); return; }
     this.fx('bn', { t: 'CLEARED!', s: 'smack the cocoon for prizes' });
     const c = room.center;
     const tile = room.tiles.map(([x, z]) => ({ x: x + 0.5, z: z + 0.5 })).filter(t => !this.map.solidAt(t.x, t.z))
@@ -880,15 +880,20 @@ export class Game {
     this.gore.confettiBurst(x, 1, z, 40, 5);
     this.hud.banner('', 'BACK FROM THE COMPOST', 1.6);
   }
-  win() {
+  // Kills and chains are counted where damage is decided, on the host. A guest's end
+  // screen grades the squad's numbers, not the zeros its own telemetry would show.
+  squadStats() { return { k: this.telemetry.c.kills, ch: this.telemetry.c.maxChain }; }
+  win(d) {
     if (this.state === 'win') return;
+    this.squad = d;
     this.state = 'win';
     this.telemetry.win();
     this.hud.banner('EXTERMINATED', 'the garden is quiet now', 3);
     setTimeout(() => this.hud.showEnd(true), 2200);
   }
-  lose() {
+  lose(d) {
     if (this.state === 'dead') return;
+    this.squad = d;
     this.state = 'dead';
     this.slowmo = 3;
     setTimeout(() => this.hud.showEnd(false), 1400);
@@ -984,7 +989,7 @@ export class Game {
       this.world.update(dt);
       for (const f of this.pending.splice(0)) f();
       this.updateRooms(dt);
-      if (this.net && !this.guest && this.players.length && this.players.every(k => k.ghost)) this.fx('lose', {});
+      if (this.net && !this.guest && this.players.length && this.players.every(k => k.ghost)) this.fx('lose', this.squadStats());
     } else {
       // Dead or won: bodies keep settling but nothing thinks.
       for (const e of this.world.entities) if (!(e instanceof Player)) { e.desiredX = e.desiredZ = 0; e.springs?.(dt); }
