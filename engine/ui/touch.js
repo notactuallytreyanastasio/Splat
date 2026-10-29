@@ -58,7 +58,7 @@ export class TouchControls {
       return;
     }
     // Anything else on the left half grabs the move stick, unless it is real UI.
-    if (e.target.closest?.('button, input, a, .boons, .end, .title')) return;
+    if (e.target.closest?.('button, input, a, .boons, .end, .title, .pause')) return;
     if (e.clientX < innerWidth * 0.5 && !this.stick) {
       e.preventDefault();
       this.stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
@@ -99,5 +99,11 @@ export class TouchControls {
   }
   // Called every frame, so the DOM is only touched when the label actually changes.
   setLabel(id, html, lit) { const b = this.buttons.get(id); if (!b) return; if (b.html !== html) { b.html = html; b.el.firstChild.innerHTML = html; } b.el.classList.toggle('lit', !!lit); }
+  // Let go of everything (the game paused under a held thumb).
+  reset() {
+    this.stick = null; this.move = { x: 0, y: 0 }; this.aim = null; this.stickEl.classList.remove('on');
+    for (const b of this.buttons.values()) { b.pointer = null; b.el.classList.remove('on'); }
+    this.held.clear(); this.tapped.clear();
+  }
   endStep() { this.tapped.clear(); }
 }

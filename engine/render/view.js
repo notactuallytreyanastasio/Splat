@@ -29,6 +29,8 @@ export class IsoView {
     this.override = null;
     this.trauma = 0;
     this.zoomKick = 0;
+    this.shakeScale = 1;  // 0 turns screen shake and zoom kicks off (a setting)
+    this.zoomScale = 1;   // camera distance multiplier (near / normal / far)
     this.time = 0;
     this.raycaster = new THREE.Raycaster();
     this.ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -76,8 +78,8 @@ export class IsoView {
   }
   releaseFocus() { const o = this.override; if (o && o.t < o.ease + o.hold) o.t = o.ease + o.hold; }
   get overriding() { return !!this.override; }
-  shake(amount) { this.trauma = Math.min(1, this.trauma + amount); }
-  kick(amount) { this.zoomKick = Math.min(0.12, this.zoomKick + amount); }
+  shake(amount) { this.trauma = Math.min(1, this.trauma + amount * this.shakeScale); }
+  kick(amount) { this.zoomKick = Math.min(0.12, this.zoomKick + amount * this.shakeScale); }
   update(dt) {
     this.time += dt;
     let w = 0, zoom = 0;
@@ -104,7 +106,7 @@ export class IsoView {
     const s = this.trauma * this.trauma * 0.6, t = this.time * 40;
     const sx = s * (Math.sin(t * 1.3) + Math.sin(t * 2.7) * 0.5);
     const sy = s * (Math.sin(t * 1.7 + 1) + Math.sin(t * 3.1) * 0.5);
-    const off = this.offset.clone().multiplyScalar((this.fit ?? 1) * (1 - this.zoomKick) * (1 - zoom));
+    const off = this.offset.clone().multiplyScalar((this.fit ?? 1) * this.zoomScale * (1 - this.zoomKick) * (1 - zoom));
     this.camera.position.copy(this.center).add(off).addScaledVector(this.right, sx);
     this.camera.position.y += sy;
     this.camera.lookAt(this.center.x + this.right.x * sx, sy * 0.5, this.center.z + this.right.z * sx);

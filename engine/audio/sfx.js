@@ -1,20 +1,27 @@
 // Procedural WebAudio. The game registers recipes; play() is safe before the first user
 // gesture (it simply stays silent until the context can start).
 export class Sfx {
-  constructor() { this.recipes = {}; this.ctx = null; this.volume = 0.5; this.last = {}; }
+  // Two gains: master is the effects bus every recipe writes to (scaled by level, the
+  // sound-volume setting); main is the final output the music joins too, so music and
+  // effects have separate volumes and one switch silences both.
+  constructor() { this.recipes = {}; this.ctx = null; this.volume = 0.5; this.level = 1; this.last = {}; }
   unlock() {
     if (this.ctx) { this.ctx.resume?.(); return; }
     try {
       this.ctx = new AudioContext();
+      this.main = this.ctx.createGain();
+      this.main.gain.value = this.volume;
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.volume;
+      this.master.gain.value = this.level;
       const comp = this.ctx.createDynamicsCompressor();
-      this.master.connect(comp).connect(this.ctx.destination);
+      this.master.connect(this.main);
+      this.main.connect(comp).connect(this.ctx.destination);
       this.noiseBuf = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     } catch { this.ctx = null; }
   }
+  setLevel(v) { this.level = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
   define(name, fn) { this.recipes[name] = fn; }
   play(name, opts = {}) {
     if (!this.ctx || this.ctx.state !== 'running') return;

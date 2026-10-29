@@ -28,6 +28,8 @@ export class Music {
     this.color = 1;   // second knob, 1 bright .. 0 drained; songs decide what it means
     this.heat = 0;    // third knob, 0 calm .. ~1.3 frenzy; songs decide what it means
     this.volume = 0.32;
+    this.level = 1;   // the player's music-volume setting
+    this.duck = 1;    // a temporary dip (the pause menu)
     this.step = 0; this.next = 0; this.abs = 0;
     this.bar = 0; this.barsIn = 0; this.pass = 0; this.fi = 0; this.section = null; this.sec = null;
     this.tracks = new Map();
@@ -51,8 +53,8 @@ export class Music {
   build() {
     const ctx = this.sfx.ctx;
     this.out = ctx.createGain();
-    this.out.gain.value = this.volume;
-    this.out.connect(this.sfx.master);
+    this.out.gain.value = this.volume * this.level * this.duck;
+    this.out.connect(this.sfx.main ?? this.sfx.master);
     // A tone filter on most of the band: wide open normally, an old record when muffled.
     this.tone = ctx.createBiquadFilter();
     this.tone.type = 'lowpass'; this.tone.frequency.value = 20000;
@@ -84,7 +86,7 @@ export class Music {
     lp.connect(eret).connect(this.out);
   }
   setTone(hz) { if (this.tone) this.tone.frequency.setTargetAtTime(hz, this.sfx.ctx.currentTime, 0.15); }
-  setVolume(v) { this.volume = v; if (this.out) this.out.gain.setTargetAtTime(v, this.sfx.ctx.currentTime, 0.2); }
+  setVolume(v = this.volume) { this.volume = v; if (this.out) this.out.gain.setTargetAtTime(v * this.level * this.duck, this.sfx.ctx.currentTime, 0.2); }
   start() {
     clearInterval(this.timer);
     this.timer = setInterval(() => this.pump(), 25);
