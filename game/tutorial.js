@@ -29,7 +29,9 @@ export const ICONS = {
   slash: svg(`<path d="M14 54A40 40 0 0 1 54 14" stroke="${INK}" stroke-width="16" stroke-linecap="butt"/>${['#ff9ecb', '#fff1a1', '#9ff0d4'].map((c, i) => { const r = 44.5 - i * 4.5; return `<path d="M${54 - r} 54A${r} ${r} 0 0 1 54 ${54 - r}" stroke="${c}" stroke-width="4.6" stroke-linecap="butt"/>`; }).join('')}<path d="M58 6l-3 12-24 24-9-9 24-24z" fill="#eaf6ff"/><path d="M17 31l16 16" stroke-width="7"/><path d="M17 31l16 16" stroke="#ff9ecb" stroke-width="2.5"/><path d="M22 42l-12 12" stroke-width="8"/><path d="M22 42l-12 12" stroke="#c8b2ff" stroke-width="3"/>`),
   combo: svg(`${arc('M4 38A13 13 0 0 1 16 25', '#ff9ecb', 4)}${arc('M14 50A20 20 0 0 1 33 27', '#ffc3a0', 6)}${arc('M28 60A30 30 0 0 1 58 24', '#fff1a1', 9)}${star(50, 13, 8, '#fff')}`),
   bonk: svg(`<path d="M2 36h6M1 45h6M4 54h6" stroke-width="3.5"/>${bug(21, 44, 13, 60)}${star(39, 28, 10)}${bug(51, 16, 10, -35)}`),
-  grab: svg(`${bug(32, 15, 9, 180)}<path d="M14 58V36a5 5 0 0 1 10 0v-6a5 5 0 0 1 10 0v2a5 5 0 0 1 10 0v4a5 5 0 0 1 10 0v12c0 6-5 10-11 10z" fill="#ffc3a0"/><path d="M24 36v8M34 32v10M44 36v8" stroke-width="3"/>`),
+  // A cupped hand with the bug sitting in it: four equal fingertips along the rim (a lone
+  // raised finger reads as a rude gesture at 46px) and two flick lines for the throw.
+  grab: svg(`${bug(32, 24, 12)}<path d="M8 36q6-6 12 0q6-6 12 0q6-6 12 0q6-6 12 0c0 13-11 22-24 22S8 49 8 36z" fill="#ffc3a0"/><path d="M20 36v7M32 36v8M44 36v7" stroke-width="3"/><path d="M8 38c-5-1-7-7-5-12 5 0 8 4 9 9z" fill="#ffc3a0"/><path d="M50 10l6-6M55 18l7-2" stroke-width="3.5"/>`),
   parry: svg(`<path d="M30 8l20 7v15c0 13-9 22-20 26-11-4-20-13-20-26V15z" fill="#fff1a1"/><path d="M30 14v36M18 24h24" stroke="#ff9ecb" stroke-width="4"/><circle cx="55" cy="44" r="6" fill="#ffe066"/><path d="M50 6l3-4M57 12l4-2M58 22h5" stroke-width="3.5"/>`),
   roll: svg(`<ellipse cx="32" cy="56" rx="20" ry="5" fill="#d9c8ff"/><path d="M48 34A17 17 0 1 1 38 17" stroke="${INK}" stroke-width="12"/><path d="M48 34A17 17 0 1 1 38 17" stroke="#9ff0d4" stroke-width="5"/><path d="M33 7l15 9-12 10z" fill="#9ff0d4"/>`),
   blender: svg(rainbowBands(32, 44)),
