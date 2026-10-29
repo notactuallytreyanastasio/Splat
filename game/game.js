@@ -34,6 +34,7 @@ import { Coop, TINTS } from './coop.js';
 import { Tutorial } from './tutorial.js';
 import { Pause } from './pause.js';
 import { quickStart } from './settings.js';
+import { lapMods, lapTheme, shader, loadRun, saveRun, clearRun } from './laps.js';
 
 const STREAKS = { 2: 'Double Tap!', 3: 'Triple Treat!', 4: 'Bug Splat Party!', 5: 'Petal Massacre!', 7: 'RAINBOW CARNAGE!', 10: 'EXTERMINATRIX!!', 15: 'APOCALYPSE PICNIC!!!' };
 const ROOM_NAMES = ['the Petal Foyer', 'the Mushroom Court', 'the Beetle Den', "the Empress's Bower"];
@@ -47,9 +48,14 @@ export class Game {
     this.seed = opts.seed ?? ((Math.random() * 1e9) | 0);
     this.levelName = opts.levelName ?? 'garden';
     this.rng = new RNG(this.seed);
+    // Which lap of the run this is (laps.js). The tutorial is always lap 1.
+    this.lap = opts.tutorial ? 1 : Math.max(1, Math.floor(+opts.lap || 1));
+    this.lapMods = lapMods(this.lap);
+    this.theme = lapTheme(this.lap);
     this.view = new IsoView(container);
     this.scene = this.view.scene;
     this.lights = makeLights(this.scene);
+    if (this.lap > 1) this.applyTheme(this.theme);
     this.input = new Input(this.view.renderer.domElement);
     this.sfx = new Sfx();
     defineSounds(this.sfx);
@@ -68,7 +74,7 @@ export class Game {
     this.world = new World(this.map);
     this.world.onImpact = (a, b, rel) => this.impact(a, b, rel);
     this.world.onTile = (e, hit) => this.tileHit(e, hit);
-    this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed));
+    this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed), { floor: shader(this.theme.floor), hedge: shader(this.theme.hedge) });
     this.flow = new FlowField(this.map);
     this.gore = new Gore(this);
     this.juice = new Juice(this);
@@ -112,6 +118,7 @@ export class Game {
     if (opts.start != null && !this.guest) this.skipToRoom(+opts.start);
     // ?boons=sticky,ricochet starts the run with those boons (testing and screenshots).
     for (const id of (opts.boons ?? '').split(',')) { const b = boonById(id); if (b) { b.apply(this.player); this.player.boons = [...(this.player.boons ?? []), b.id]; this.telemetry.boon(b); } }
+    this.restoreRun();
     this.view.snap(this.player.x, this.player.z);
     this.loop = new Loop({ update: (dt, frozen) => this.update(dt, frozen), render: dt => this.render(dt) });
     this.loop.speed = opts.speed ?? 1;
@@ -125,7 +132,44 @@ export class Game {
   begin() {
     document.body.classList.add('playing');
     this.applyAudioMode();
-    if (!this.guest && !this.tutorial) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
+    if (this.guest || this.tutorial) return;
+    if (this.lap > 1) this.fx('lap', { n: this.lap });
+    else this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' });
+  }
+  // ------------------------------------------------------------------ laps
+  // Sky, light and (via buildLevelMeshes) floor and hedges for this lap's hour.
+  applyTheme(th) {
+    this.scene.background.setHex(th.sky);
+    const { hemi, sun } = this.lights;
+    hemi.color.setHex(th.hemi[0]); hemi.groundColor.setHex(th.hemi[1]); hemi.intensity = th.hemi[2];
+    sun.color.setHex(th.sun[0]); sun.intensity = th.sun[1];
+    document.body.dataset.lap = th.key;
+  }
+  // The build carried over from the lap before: boons re-applied in the order they were
+  // taken, then level, xp and potions put back exactly (Nectar Stash's +2 potions must not
+  // be paid out twice). A new lap starts at full health.
+  restoreRun() {
+    const run = loadRun(this.lap);
+    this.runTotals = { kills: run?.kills ?? 0, time: run?.time ?? 0 };
+    // ?lap=N typed by hand starts that lap with nothing; it is not a record-setting run.
+    this.lapEarned = this.lap === 1 || !!run;
+    if (!run) return;
+    const p = this.player;
+    for (const id of run.boons ?? []) { const b = boonById(id); if (b) { b.apply(p); p.boons = [...(p.boons ?? []), b.id]; } }
+    this.level_ = run.level ?? 1; this.xp = run.xp ?? 0; this.gems = run.gems ?? 0;
+    p.potions = run.potions ?? p.potions;
+    p.hp = p.stats.maxHp;
+    this.owedBoons = 0; this.pendingBoons = run.owed ?? 0; // offered once the lap is under way
+  }
+  // What the next lap needs to rebuild this knight. Every peer saves its own.
+  saveRunFor(lap) {
+    const p = this.player, c = this.telemetry.c;
+    // Boons earned but not picked: the Empress's 40 gems often level you up during her death
+    // scene, when no picker may open, or a co-op picker was still waiting at the win.
+    const owed = (this.owedBoons ?? 0) + (this.offers ? 1 : 0) + (this.queuedBoons ?? 0);
+    saveRun({ lap, boons: p.boons ?? [], owed, level: this.level_, xp: this.xp, gems: this.gems, potions: p.potions,
+      kills: this.runTotals.kills + (this.squad?.k ?? c.kills), time: Math.round(this.runTotals.time + this.telemetry.t) });
+  }
   // all -> sfx only -> silent. Remembered per browser.
   cycleAudio() {
     this.audioMode = { all: 'sfx', sfx: 'off', off: 'all' }[this.audioMode];
@@ -202,7 +246,8 @@ export class Game {
       case 'rez': return this.revive(d.x, d.z);
       case 'win': return this.win(d);
       case 'lose': return this.lose(d);
-      case 'restart': return this.restart(false, d.seed);
+      case 'restart': return this.restart(false, d.seed, d.lap);
+      case 'lap': return this.lapFx(d);
       case 'parried': return this.parriedFx(d);
       case 'bmp': return this.bumpFx(d);
       case 'bi': return this.bossIntroFx(d);
@@ -243,14 +288,21 @@ export class Game {
         room.waves.push(Array.from({ length: n }, () => this.rng.pick(types)));
         if (room.index >= 2) room.waves.push(Array.from({ length: n + 2 }, () => this.rng.pick([...types, 'butterfly'])));
       }
+      // Later laps: one more wave per room per lap (two at most), the first room included.
+      if (room.combat && !room.boss) {
+        const types = room.spawns.map(s => s.type).filter(t => ENEMIES[t]);
+        for (let w = 0; w < this.lapMods.waves && types.length; w++) room.waves.push(Array.from({ length: types.length + 1 + room.index }, () => this.rng.pick([...types, 'butterfly', 'ladybug'])));
+      }
     }
   }
   spawnEnemy(type, x, z, room, index = 0) {
-    if (type === 'mantis') return this.world.add(new Mantis(this, x, z, room.id));
-    const elite = this.rng.chance(0.06 + index * 0.05);
-    // More knights, more bugs.
+    const L = this.lapMods;
+    if (type === 'mantis') { const m = this.world.add(new Mantis(this, x, z, room.id)); m.maxHp = m.hp = Math.round(m.hp * L.boss); return m; }
+    const elite = this.rng.chance(0.06 + index * 0.05 + L.elite);
+    // More knights, more bugs; later laps, tougher and quicker bugs.
     const e = this.world.add(new Enemy(this, x, z, type, { elite, room: room.id, index }));
-    e.maxHp = e.hp = Math.round(e.hp * (1 + 0.4 * ((this.net?.peers.size ?? 1) - 1)));
+    e.maxHp = e.hp = Math.round(e.hp * (1 + 0.4 * ((this.net?.peers.size ?? 1) - 1)) * L.hp);
+    e.speed0 *= L.speed;
     return e;
   }
   roomOf(e) { return this.level.regionAt(Math.floor(e.x), Math.floor(e.z)); }
@@ -390,6 +442,8 @@ export class Game {
       info.amount *= st.damage;
       if (info.kind !== 'impact' && info.kind !== 'wall' && Math.random() < st.crit) { info.crit = true; info.amount *= st.critMul; info.knock = (info.knock ?? 0) * 1.3; }
     }
+    // Later laps: everything that hurts a knight hurts more (bugs, pollen, the Empress).
+    if (isPlayer && this.lap > 1) info.amount *= this.lapMods.dmg;
     info.amount = Math.max(1, Math.round(info.amount));
     if (isPlayer && target.parryT > 0 && info.source && !(info.source instanceof Pollen)) { this.parry(target, info.source); return false; }
     if (isPlayer && target.remote) {
@@ -1082,7 +1136,8 @@ export class Game {
   offerBoon() {
     // No boon picker over the Empress's death scene: it would pause the crown mid-air and
     // the end screen would land on top of it.
-    if (this.ending) return;
+    // The level still counts: the boon is owed, and paid on the next lap (laps.js).
+    if (this.ending) { this.owedBoons = (this.owedBoons ?? 0) + 1; return; }
     if (this.offers) { this.queuedBoons = (this.queuedBoons ?? 0) + 1; return; }
     this.offers = rollBoons(this.rng, 3);
     if (!this.net) this.state = 'boon';
@@ -1166,11 +1221,26 @@ export class Game {
     this.slowmo = 3;
     setTimeout(() => this.hud.showEnd(false), 1400);
   }
-  restart(nextSeed = true, seed) {
+  // Every restart is a reload. A won run goes on to the next lap with the build saved for
+  // it; anything else (a death, a squad wipe) is a fresh run at lap 1 with nothing carried.
+  restart(nextSeed = true, seed, lap = 1) {
     const q = new URLSearchParams(location.search);
     if (seed != null) q.set('seed', seed);
     else if (nextSeed) q.set('seed', (this.seed + 1) >>> 0);
+    if (lap > 1) {
+      this.saveRunFor(lap);
+      q.set('lap', lap);
+      // The carried build replaces any debug start: no skipping rooms, no boons twice.
+      q.delete('start'); q.delete('boons');
+    } else { clearRun(); q.delete('lap'); }
     location.search = q.toString();
+  }
+  // A lap's seed: different waves and elites every lap, but the same for every peer.
+  lapSeed(lap) { return (Math.imul(this.seed ^ 0x9e3779b9, 31) + lap * 7919) >>> 0; }
+  lapFx(d) {
+    this.hud.lapCard(d.n, lapTheme(d.n));
+    this.sfx.play('gate'); this.sfx.play('levelup');
+    this.view.shake(0.2);
   }
 
   // ------------------------------------------------------------------ loop
@@ -1252,6 +1322,8 @@ export class Game {
     this.player.intent = this.intent;
     this.threat = this.incoming(this.player);
     if (this.pendingLevels) { this.pendingLevels--; this.levelUp(); }
+    // After the LAP card has gone (3.2 s + its exit), not on top of it.
+    if (this.pendingBoons && this.time > 3.8) { this.pendingBoons--; this.offerBoon(); }
     if (this.offers && this.intent.choose >= 0) this.chooseBoon(this.intent.choose);
     if (this.state === 'boon') { this.input.endStep(); this.touch.endStep(); return; }
     if (this.state === 'play') {
@@ -1267,8 +1339,11 @@ export class Game {
       for (const e of this.world.entities) if (!(e instanceof Player)) { e.desiredX = e.desiredZ = 0; e.springs?.(dt); }
       if ((this.input.tapped('Enter', 'Space') || this.againTapped) && !this.guest) {
         this.againTapped = false;
-        if (this.net) this.fx('restart', { seed: (this.seed + 1) >>> 0 });
-        else this.restart(this.state === 'dead');
+        const won = this.state === 'win', lap = won ? this.lap + 1 : 1;
+        const seed = won ? this.lapSeed(lap) : (this.seed + 1) >>> 0;
+        // The host is about to reload: get the order to the guests before the page goes.
+        if (this.net) { this.coop.broadcast('restart', { seed, lap }); this.coop.flush(); this.restart(false, seed, lap); }
+        else this.restart(false, seed, lap);
       }
     }
     this.coop?.update(dt);

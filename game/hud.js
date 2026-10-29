@@ -36,6 +36,7 @@ export class Hud {
       <div class="xp"><div class="fill"></div><b class="lvl"></b></div>
       <div class="potions"></div>
       <div class="gems">${icon('gem')}<span></span></div>
+      <div class="lapchip"></div>
       <div class="streak">${BURST}<b></b><i></i></div>
       <div class="banner"><h1></h1><h2></h2></div>
       <div class="boss"><label>EMPRESS MANTIS</label><div class="bar"><div class="fill"></div></div></div>
@@ -57,6 +58,8 @@ export class Hud {
     this.tags = new Map();
     this.$('.audio').onclick = e => { e.stopPropagation(); this.g.cycleAudio(); };
     this.audioIcon(game.audioMode);
+    // Lap 1 is just the game; from lap 2 the HUD always says how deep you are.
+    if (game.lap > 1) { const c = this.$('.lapchip'); c.innerHTML = `${icon('lap')}<b>LAP ${game.lap}</b>`; c.classList.add('on'); c.title = game.theme.name.toLowerCase(); }
     this.bannerT = 0;
     this.lagHp = game.player.hp; this.lagHold = 0; this.beatT = 0; this.rageFull = false;
   }
@@ -156,6 +159,7 @@ export class Hud {
   title(onStart, net) {
     const t = this.$('.title');
     t.classList.add('on');
+    if (this.g.lap > 1) this.lapTitle(t, net);
     if (net) {
       const link = `${location.origin}${location.pathname.replace(/index\.html$/, '')}?coop=${net.room}`;
       t.querySelector('.modes').innerHTML = `<p class="room">co-op room <b>${net.room}</b> · you are <b>${net.name}</b> · ${net.isHost ? 'you host' : 'joined'}</p><p class="share">send this: <button class="copy" type="button"><code>${link}</code><span>tap to copy</span></button></p>`;
@@ -169,7 +173,9 @@ export class Hud {
         copy.querySelector('span').textContent = ok ? 'copied!' : 'long-press to copy';
         setTimeout(() => { copy.querySelector('span').textContent = 'tap to copy'; }, 1800);
       };
-      t.querySelector('button').textContent = net.isHost ? 'start the massacre' : 'jump in';
+      t.querySelector('button').textContent = net.isHost ? (this.g.lap > 1 ? `start lap ${this.g.lap}` : 'start the massacre') : 'jump in';
+    } else if (this.g.lap > 1) {
+      t.querySelector('.fresh').onclick = e => { e.stopPropagation(); this.g.restart(true); };
     } else {
       // Co-op stays hidden until its server channel is live (?beta shows it).
       t.querySelector('.howto').onclick = e => { e.stopPropagation(); location.search = '?tutorial'; };
@@ -180,6 +186,29 @@ export class Hud {
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(); };
     t.querySelector('button').onclick = go;
     addEventListener('keydown', key);
+  }
+  // The title screen between laps: the reload needs a click for audio anyway, so it doubles
+  // as the "you made it" card. It names the lap and its hour and lists what you carry.
+  lapTitle(t, net) {
+    const g = this.g, p = g.player, th = g.theme, nb = p.boons?.length ?? 0;
+    t.classList.add('lap');
+    t.querySelector('h1').innerHTML = `<span class="lapno">${icon('lap')}LAP ${g.lap}</span><br>${th.name}`;
+    t.querySelector('h2').textContent = th.sub;
+    t.querySelector('.tip').innerHTML = g.lapEarned
+      ? `you carry <b>LV ${g.level_}</b>, <b>${nb}</b> boon${nb === 1 ? '' : 's'} and <b>${p.potions}</b> potion${p.potions === 1 ? '' : 's'}. the bugs carry grudges: more of them, tougher, faster.`
+      : 'the bugs are tougher, faster and there are more of them.';
+    t.querySelector('button').textContent = `start lap ${g.lap}`;
+    if (!net) t.querySelector('.modes').innerHTML = '<button class="fresh" type="button">start a fresh run instead</button>';
+  }
+  // Lap banner at the start of a lap: the number big, the hour on a ribbon.
+  lapCard(n, th) {
+    let c = this.$('.lapcard');
+    if (!c) { c = document.createElement('div'); c.className = 'lapcard'; document.getElementById('hud').append(c); }
+    c.innerHTML = `<div class="no">${icon('lap')}<b>LAP ${n}</b></div><div class="ribbon"><h1>${th.name}</h1></div><h2>${th.sub}</h2>`;
+    c.classList.remove('off', 'on'); void c.offsetWidth; c.classList.add('on');
+    clearTimeout(this.lapOut);
+    this.lapOut = setTimeout(() => { c.classList.remove('on'); c.classList.add('off'); }, 3200);
+    this.bannerT = 0;
   }
   restart(sel, cls) { const el = this.$(sel); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
   crit() { this.restart('.edge', 'on'); }
@@ -250,7 +279,7 @@ export class Hud {
     if (g.guest && g.squad?.k != null) { t.kills = g.squad.k; t.maxChain = Math.max(t.maxChain, g.squad.ch ?? 0); }
     const { grade, score, parts } = gradeRun(t, won);
     // Bot, god-mode and skip-ahead runs are graded but never set records.
-    const { old, next, broke } = recordBests(t, won, grade, !g.bot && !g.god && g.opts.start == null && !g.opts.boons);
+    const { old, next, broke } = recordBests(t, won, grade, !g.bot && !g.god && g.opts.start == null && !g.opts.boons && g.lapEarned, g.lap);
     const mmss = s => s == null ? '--' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     const stamp = k => broke[k] ? '<i class="nb">NEW BEST</i>' : '';
     const metric = (ic, label, val, part, k, i) => `<div class="m" style="--d:${0.25 + i * 0.12}s"><span class="mi">${METRIC_ICONS[ic]}</span><span class="ml">${label}</span><b>${val}</b><em><u style="width:${Math.round(part * 100)}%"></u></em>${stamp(k)}</div>`;
@@ -259,8 +288,9 @@ export class Hud {
     const cards = [...counts].map(([id, n], i) => { const b = boonById(id); return b ? `<div class="bc" style="--d:${0.9 + i * 0.06}s" title="${b.desc}">${icon(b.icon)}<span>${b.name}</span>${n > 1 ? `<em>x${n}</em>` : ''}</div>` : ''; }).join('');
     const el = this.$('.end');
     el.innerHTML = `<div class="sheet">
+      ${g.lap > 1 || won ? `<div class="laptag">${icon('lap')}<b>LAP ${g.lap}</b><span>${won ? 'cleared' : g.theme.name.toLowerCase()}</span></div>` : ''}
       <h1>${won ? 'EVERYTHING IS DEAD' : 'ADORABLY MURDERED'}</h1>
-      <h2>${won ? 'the garden is spotless. well, no.' : `popped in ${g.level.rooms[g.currentRoom]?.name ?? 'the garden'}`}</h2>
+      <h2>${won ? (g.lap > 1 ? `lap ${g.lap} of the garden, spotless. lap ${g.lap + 1} is meaner.` : 'the garden is spotless. well, no.') : `popped in ${g.level.rooms[g.currentRoom]?.name ?? 'the garden'}${g.lap > 1 ? ` on lap ${g.lap}` : ''}`}</h2>
       <div class="top">
         <div class="grade g${grade}">${ROSETTE}<b>${grade}</b><small>${score} pts</small>${stamp('grade')}</div>
         <div class="metrics">
@@ -270,10 +300,10 @@ export class Hud {
           ${metric('skull', 'bugs squished', t.kills, parts.kills, null, 3)}
         </div>
       </div>
-      <div class="bests"><span class="bl">personal bests</span><span>time <b>${mmss(next.time)}</b></span><span>grade <b>${next.grade ?? '--'}</b></span><span>chain <b>x${next.chain ?? 0}</b></span>${old.grade == null ? '<span class="first">first run on record</span>' : ''}</div>
-      <div class="extras"><span><b>${t.gibs}</b> pieces</span><span><b>${t.droplets}</b> drops of blood</span><span><b>${t.wallSlams}</b> wall splats</span><span><b>${t.bestStreak}</b> best streak</span><span><b>LV ${g.level_}</b></span></div>
+      <div class="bests"><span class="bl">personal bests</span><span>time <b>${mmss(next.time)}</b></span><span>grade <b>${next.grade ?? '--'}</b></span><span>chain <b>x${next.chain ?? 0}</b></span><span>deepest lap <b>${next.lap ?? 1}</b>${broke.lap ? ' <i class="nb inl">NEW BEST</i>' : ''}</span>${old.grade == null ? '<span class="first">first run on record</span>' : ''}</div>
+      <div class="extras"><span><b>${t.gibs}</b> pieces</span><span><b>${t.droplets}</b> drops of blood</span><span><b>${t.wallSlams}</b> wall splats</span><span><b>${t.bestStreak}</b> best streak</span><span><b>LV ${g.level_}</b></span>${g.lap > 1 && g.runTotals ? `<span><b>${g.runTotals.kills + t.kills}</b> bugs this run</span>` : ''}</div>
       ${cards ? `<div class="build"><span class="bl">your build</span><div class="cards">${cards}</div></div>` : '<div class="build"><span class="bl">no boons taken. brave.</span></div>'}
-      <p>${g.guest ? 'waiting for the host…' : `<button class="again" type="button">${won ? 'another lap' : 'new run'}</button><small class="hint">or press ENTER</small>`}</p>
+      <p>${g.guest ? 'waiting for the host…' : `<button class="again" type="button">${won ? `another lap: lap ${g.lap + 1}` : 'new run'}</button><small class="hint">or press ENTER</small>`}</p>
     </div>`;
     el.classList.toggle('won', won);
     el.classList.add('on');

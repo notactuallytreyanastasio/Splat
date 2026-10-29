@@ -63,8 +63,10 @@ export function parseLevel(json) {
   return { map, rooms, doors, start, regionAt, name: json.name ?? 'level' };
 }
 
-export function buildLevelMeshes(scene, L, rng) {
+// `theme` (laps.js) recolors floor and hedges for later laps; lap 1 passes none.
+export function buildLevelMeshes(scene, L, rng, theme = {}) {
   const { map, regionAt } = L;
+  const fl = theme.floor ?? (h => h), hd = theme.hedge ?? (h => h);
   const floorish = (x, z) => { const c = map.at(x, z); return c !== '#' && c !== ' '; };
   const style = (x, z) => {
     const ch = map.at(x, z);
@@ -72,16 +74,16 @@ export function buildLevelMeshes(scene, L, rng) {
     if (ch === '#') {
       const low = floorish(x, z - 1) || floorish(x - 1, z) || floorish(x - 1, z - 1);
       const stripe = (x + z) % 2 ? 0x95dcae : 0x86cf9f;
-      return { height: low ? 0.55 : 1.9, top: vcol(0xc6f5d2), side: vcol(stripe), inset: 0 };
+      return { height: low ? 0.55 : 1.9, top: vcol(hd(0xc6f5d2)), side: vcol(hd(stripe)), inset: 0 };
     }
     const rid = regionAt(x, z);
     let pal = FLOOR_PALETTES[(rid < 0 ? 0 : rid) % FLOOR_PALETTES.length];
-    if (L.rooms[rid]?.boss) { const c = new THREE.Color(RAINBOW[((x + z) >> 1) % 6]).lerp(new THREE.Color(0xffffff), 0.55); return { height: 0, top: [c.r, c.g, c.b], inset: 0.035 }; }
+    if (L.rooms[rid]?.boss) { const c = new THREE.Color(RAINBOW[((x + z) >> 1) % 6]).lerp(new THREE.Color(0xffffff), 0.55); c.setHex(fl(c.getHex())); return { height: 0, top: [c.r, c.g, c.b], inset: 0.035 }; }
     let col = pal[(x + z) % 2];
     if (ch === ',') col = 0xffd0e4;
     if (ch === '+') col = 0xf2d0ff;
     const jitter = 0.97 + ((x * 7 + z * 13) % 5) * 0.012;
-    return { height: 0, top: vcol(col, jitter), inset: 0.035 };
+    return { height: 0, top: vcol(fl(col), jitter), inset: 0.035 };
   };
   const mesh = buildTileMesh(map.w, map.h, style);
   scene.add(mesh);
@@ -99,7 +101,7 @@ export function buildLevelMeshes(scene, L, rng) {
       const s = style(x, z);
       // Flowers sprout from hedge tops.
       if (s.height > 1 && rng.chance(0.18)) { const f = flower(kit, x + 0.5, z + 0.5, rng, 0.45); f.position.y = s.height; props.add(f); }
-    } else if (ch === '.' && rng.chance(0.025)) props.add(tuft(kit, x + rng.next(), z + rng.next(), rng));
+    } else if (ch === '.' && rng.chance(0.025)) props.add(tuft(kit, x + rng.next(), z + rng.next(), rng, hd(0xa8e6b8)));
   }
   // Flowers and tufts never move: bake them into two draw calls. Mushrooms stay
   // separate because they fade when they hide the player.
@@ -177,9 +179,9 @@ function flower(kit, x, z, rng, s = 1) {
   g.rotation.y = rng.next() * 6;
   return g;
 }
-function tuft(kit, x, z, rng) {
+function tuft(kit, x, z, rng, color = 0xa8e6b8) {
   const g = new THREE.Group();
-  for (let i = 0; i < 3; i++) kit.part('cone', 0xa8e6b8, { s: [0.06, 0.25, 0.06], p: [(i - 1) * 0.06, 0.1, 0], r: [0, 0, (i - 1) * 0.35], parent: g, outline: 0.01, shadow: false });
+  for (let i = 0; i < 3; i++) kit.part('cone', color, { s: [0.06, 0.25, 0.06], p: [(i - 1) * 0.06, 0.1, 0], r: [0, 0, (i - 1) * 0.35], parent: g, outline: 0.01, shadow: false });
   g.position.set(x, 0, z);
   return g;
 }
