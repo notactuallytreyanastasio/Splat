@@ -54,8 +54,8 @@
   .xp { position: absolute; left: 160px; right: 160px; bottom: 26px; height: 18px; border: 4px solid var(--ink); border-radius: 12px; background: #fff6fb; overflow: hidden; }
   .xp .fill { height: 100%; background: linear-gradient(90deg, var(--mint), #a6dcff); transition: width .2s; }
   .xp .lvl { position: absolute; left: 50%; top: -3px; transform: translateX(-50%); font-size: 15px; color: #fff; -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
-  .potions { position: absolute; left: 150px; bottom: 52px; font-size: 28px; color: var(--pink); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; letter-spacing: 2px; }
-  .gems { position: absolute; right: 152px; bottom: 54px; font-size: 22px; font-weight: 700; color: var(--lemon); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  .potions { position: absolute; left: 150px; bottom: 50px; display: flex; gap: 1px; --h: 30px; }
+  .gems { position: absolute; right: 152px; bottom: 52px; display: flex; align-items: center; gap: 4px; font-size: 22px; font-weight: 700; color: var(--lemon); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
   .streak { position: absolute; right: 30px; top: 90px; text-align: right; opacity: 0; transition: opacity .3s; }
   .streak.on { opacity: 1; } .streak.pop { animation: pop .3s; }
   .streak b { display: block; font-size: 40px; color: var(--pink); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }
@@ -73,13 +73,6 @@
   .boons, .end { position: absolute; inset: 0; display: none; place-content: center; text-align: center; background: rgba(255, 233, 246, .72); backdrop-filter: blur(4px); pointer-events: auto; }
   .boons.on, .end.on { display: grid; }
   .boons h1, .end h1 { margin: 0 0 18px; font-size: 56px; color: #fff; -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill; }
-  .boons .cards { display: flex; gap: 20px; justify-content: center; }
-  .boons button { width: 210px; padding: 18px 14px 20px; border: 6px solid var(--ink); border-radius: 22px; background: var(--cream); font: inherit; color: var(--ink); cursor: pointer;
-    box-shadow: 0 8px 0 var(--ink); position: relative; transition: transform .1s; }
-  .boons button:nth-child(1) { background: #ffe3ee; } .boons button:nth-child(2) { background: #dcfaec; } .boons button:nth-child(3) { background: #ece3ff; }
-  .boons button:hover { transform: translateY(-6px) rotate(-1deg); }
-  .boons em { position: absolute; top: -18px; left: -14px; width: 40px; height: 40px; border-radius: 50%; background: var(--pink); color: #fff; border: 4px solid var(--ink); font-style: normal; font-weight: 700; display: grid; place-items: center; }
-  .boons .icon { display: block; font-size: 44px; } .boons b { display: block; font-size: 22px; margin: 6px 0; } .boons small { font-size: 16px; }
   .boons p, .end p { font-size: 20px; font-weight: 700; }
   .end .stats { display: grid; grid-template-columns: repeat(4, 150px); gap: 12px; justify-content: center; }
   .end .stats div { background: var(--cream); border: 5px solid var(--ink); border-radius: 18px; padding: 10px; box-shadow: 0 6px 0 var(--ink); font-size: 15px; }
@@ -106,7 +99,7 @@
   .title .copy span { color: var(--pink); font-size: 13px; }
   .title .copy:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
   .audio { position: absolute; top: 8px; right: 10px; width: 38px; height: 38px; border-radius: 50%; border: 4px solid var(--ink); background: #fff; color: var(--ink); font: 700 18px Fredoka, system-ui; pointer-events: auto; box-shadow: 0 3px 0 var(--ink); padding: 0; z-index: 6; }
-  .audio.muted { background: #eee; }
+  .audio.muted { background: #efe6f4; }
   body.touching .audio { top: calc(env(safe-area-inset-top) + 56px); right: calc(env(safe-area-inset-right) + 10px); }
   /* noir: the HUD keeps its reds, loses the pastels */
   body.noir #hud .orb.rage, body.noir #hud .xp, body.noir #hud .gems, body.noir .touch .tb:not(.big) { filter: grayscale(1) contrast(1.2); transition: filter .3s; }
@@ -118,7 +111,6 @@
   .tag { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 15px; -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; white-space: nowrap; }
   .floater.ally { color: #e2d4ff; font-size: 18px; }
   .boons.live { background: transparent; backdrop-filter: none; pointer-events: none; place-content: end center; padding-bottom: 150px; }
-  .boons.live h1 { font-size: 30px; } .boons.live button { pointer-events: auto; width: 170px; padding: 10px; } .boons.live .icon { font-size: 30px; }
   .lobby { position: absolute; inset: 0; display: grid; place-content: center; font-size: 26px; font-weight: 700; text-align: center; }
   /* manipulation, not none, on the page: pinch must stay possible so an accidental zoom
      can be undone. The canvas and the controls take every gesture for the game. */
@@ -131,7 +123,6 @@
   .orb span { font-size: clamp(18px, 3.6vmin, 30px); }
   .banner h1 { font-size: clamp(30px, 7.5vw, 64px); } .banner h2 { font-size: clamp(16px, 3.2vw, 26px); }
   .title h1 { font-size: clamp(42px, 10vw, 84px); }
-  .boons .cards { flex-wrap: wrap; padding: 0 12px; } .boons button { width: clamp(150px, 28vw, 210px); }
   .end .stats { grid-template-columns: repeat(auto-fit, minmax(118px, 150px)); max-width: 92vw; }
   .end .again { font: 700 22px Fredoka, system-ui; padding: 10px 26px; border: 5px solid var(--ink); border-radius: 18px; background: var(--pink); color: #fff; box-shadow: 0 6px 0 var(--ink); }
   .touch { display: none; }
@@ -159,8 +150,8 @@
   body.touching .orb.hp { left: calc(env(safe-area-inset-left) + 8px); }
   body.touching .orb.rage { right: auto; left: calc(env(safe-area-inset-left) + 16px + clamp(54px, 11vmin, 90px)); }
   body.touching .xp { top: calc(env(safe-area-inset-top) + 10px); bottom: auto; left: calc(env(safe-area-inset-left) + 30px + clamp(108px, 22vmin, 180px)); right: calc(env(safe-area-inset-right) + 12px); height: 14px; }
-  body.touching .potions { bottom: auto; top: calc(env(safe-area-inset-top) + 34px); left: calc(env(safe-area-inset-left) + 30px + clamp(108px, 22vmin, 180px)); font-size: 20px; }
-  body.touching .gems { bottom: auto; top: calc(env(safe-area-inset-top) + 34px); right: calc(env(safe-area-inset-right) + 12px); font-size: 18px; }
+  body.touching .potions { bottom: auto; top: calc(env(safe-area-inset-top) + 32px); left: calc(env(safe-area-inset-left) + 30px + clamp(108px, 22vmin, 180px)); --h: 22px; }
+  body.touching .gems { bottom: auto; top: calc(env(safe-area-inset-top) + 32px); right: calc(env(safe-area-inset-right) + 12px); font-size: 18px; }
   body.touching .streak { top: calc(env(safe-area-inset-top) + 64px); }
   body.touching .roster { top: calc(env(safe-area-inset-top) + 12px + clamp(54px, 11vmin, 90px)); }
   body.touching .boss { top: calc(env(safe-area-inset-top) + 56px); }
@@ -178,6 +169,82 @@
   .touch .tb.small { --s: clamp(40px, 8vmin, 60px); font-size: 11px; }
   .perf { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font: 12px monospace; background: #3a2346; color: #fff; padding: 2px 8px; border-radius: 6px; z-index: 9; }
   .help { position: absolute; top: 10px; left: 12px; font-size: 13px; opacity: .7; font-weight: 500; }
+  /* Hand-drawn icons (game/icons.js). Ink width is inherited from the <svg>, so small
+     placements thicken it to keep the outline about 2px on screen. */
+  .ic { display: block; overflow: visible; }
+  .potions .ic { width: var(--h); height: var(--h); stroke-width: 6; filter: drop-shadow(0 2px 0 var(--ink)); }
+  .potions .ic:last-child { animation: heartbeat 1.6s ease-in-out infinite; }
+  .potions .none .ic { opacity: .3; filter: grayscale(.6); animation: none; } /* empty slot, so the row never just vanishes */
+  @keyframes heartbeat { 0%, 70%, 100% { transform: scale(1); } 78% { transform: scale(1.18); } 86% { transform: scale(.96); } }
+  .gems .ic { width: 1.25em; height: 1.25em; stroke-width: 6; -webkit-text-stroke: 0; }
+  .audio .ic { width: 22px; height: 22px; margin: auto; stroke-width: 7; }
+  .audio:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  .roster .ic { width: 18px; height: 18px; stroke-width: 7; animation: bob 1.2s ease-in-out infinite alternate; }
+  .roster .ghost { opacity: .75; }
+  .roster span { margin-left: auto; } /* the ghost glyph must not push one bar out of line */
+  @keyframes bob { to { transform: translateY(-3px) rotate(6deg); } }
+  .touch .tb > span { display: grid; place-items: center; gap: 1px; }
+  .touch .tb .ic { width: calc(var(--s) * .52); height: calc(var(--s) * .52); stroke-width: 6; }
+  .touch .tb[data-id="special"]:not(.lit) .ic { opacity: .4; filter: saturate(.35); width: calc(var(--s) * .4); height: calc(var(--s) * .4); }
+  .touch .tb.lit .ic { animation: wiggle .5s ease-in-out infinite alternate; }
+
+  /* Level-up cards: dealt in with a bounce, lift and wiggle on hover, squash on press,
+     and the chosen card flashes while the others drop away. */
+  .boons.on { animation: fadein .18s ease-out; }
+  @keyframes fadein { from { opacity: 0; } }
+  .boons h1 { animation: stamp .45s cubic-bezier(.2, 1.8, .4, 1) both; }
+  @keyframes stamp { from { transform: scale(2.2) rotate(-8deg); opacity: 0; } to { transform: rotate(-2deg); } }
+  .boons .cards { display: flex; gap: clamp(12px, 2.4vw, 26px); justify-content: center; flex-wrap: wrap; padding: 14px 12px 6px; }
+  .boons .card { --bg: #ffe3ee; --ring: var(--pink); --tilt: -2deg;
+    position: relative; width: clamp(150px, 28vw, 214px); padding: 16px 14px 18px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    border: 6px solid var(--ink); border-radius: 24px; color: var(--ink); font: inherit; cursor: pointer;
+    background: radial-gradient(rgba(255,255,255,.6) 2px, transparent 2.5px) 0 0 / 14px 14px, var(--bg);
+    box-shadow: 0 8px 0 var(--ink); transform: rotate(var(--tilt));
+    transition: transform .18s cubic-bezier(.3, 1.8, .5, 1), box-shadow .18s;
+    animation: deal .55s cubic-bezier(.2, 1.5, .45, 1) backwards; animation-delay: calc(var(--i) * 90ms + 120ms); }
+  .boons .card:nth-child(2) { --bg: #dcfaec; --ring: var(--mint); --tilt: 1deg; }
+  .boons .card:nth-child(3) { --bg: #ece3ff; --ring: var(--lilac); --tilt: 2.5deg; }
+  @keyframes deal { from { transform: translateY(70vh) rotate(calc(var(--tilt) * -8)) scale(.7); } }
+  .boons .card:hover, .boons .card:focus-visible { transform: translateY(-10px) rotate(0) scale(1.04); box-shadow: 0 16px 0 var(--ink); outline: none; }
+  .boons .card:active { transform: translateY(4px) scale(.97); box-shadow: 0 2px 0 var(--ink); transition-duration: .05s; }
+  .boons .medal { display: grid; place-items: center; width: clamp(64px, 13vmin, 100px); aspect-ratio: 1; border-radius: 50%; background: #fff;
+    border: 5px solid var(--ink); box-shadow: 0 0 0 5px var(--ring), 0 0 0 10px var(--ink); margin: 6px 0 8px; }
+  .boons .medal .ic { width: 78%; height: 78%; }
+  .boons .card:hover .medal .ic, .boons .card:focus-visible .medal .ic { animation: wiggle .32s ease-in-out infinite alternate; }
+  @keyframes wiggle { from { transform: rotate(-8deg) scale(1.06); } to { transform: rotate(8deg) scale(1.06); } }
+  .boons .card > b { display: block; font-size: clamp(17px, 2.3vw, 22px); line-height: 1.05; }
+  .boons .card > small { display: block; font-size: clamp(13px, 1.6vw, 16px); font-weight: 500; line-height: 1.25; }
+  .boons .card > small i { font-style: normal; font-weight: 700; color: var(--pink); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
+  .boons .key { position: absolute; top: -18px; left: -14px; width: 40px; height: 40px; border-radius: 50%; background: var(--pink); color: #fff; border: 4px solid var(--ink);
+    box-shadow: 0 3px 0 var(--ink); font-style: normal; font-weight: 700; font-size: 20px; display: grid; place-items: center; transform: rotate(-10deg); }
+  body.touching .boons .key { display: none; }
+  body.picking .touch { visibility: hidden; } /* solo pick: the thumb buttons would sit on the cards */
+  .boons.out { pointer-events: none; animation: fadeout .38s ease-in forwards; }
+  .boons.out h1 { animation: none; }
+  .boons.out .card { animation: drop .3s ease-in forwards; }
+  .boons.out .card.picked { animation: picked .38s cubic-bezier(.2, 1.6, .4, 1) forwards; }
+  @keyframes fadeout { 60% { opacity: 1; } to { opacity: 0; } }
+  @keyframes drop { to { transform: translateY(40vh) rotate(calc(var(--tilt) * 6)); opacity: 0; } }
+  @keyframes picked { 30% { transform: scale(1.14) rotate(0); background: #fff; } to { transform: scale(1.3) rotate(0); opacity: 0; } }
+  /* Co-op cannot pause, so the cards sit low and small while you fight. */
+  .boons.live h1 { font-size: 30px; margin-bottom: 4px; }
+  .boons.live .card { pointer-events: auto; width: 170px; padding: 10px 10px 12px; gap: 3px; }
+  .boons.live .medal { width: 54px; border-width: 4px; box-shadow: 0 0 0 4px var(--ring), 0 0 0 8px var(--ink); margin: 4px 0; }
+  /* Short landscape phones: the cards must fit under the title in 390px. */
+  @media (max-height: 480px) {
+    .boons h1 { font-size: 36px; margin-bottom: 6px; }
+    .boons .card { padding: 10px 10px 12px; gap: 3px; }
+    .boons .medal { width: 56px; border-width: 4px; box-shadow: 0 0 0 4px var(--ring), 0 0 0 8px var(--ink); margin: 4px 0; }
+    .boons p { margin: 6px 0 0; font-size: 16px; }
+  }
+  /* Narrow portrait: one card per row, medal on the left. */
+  @media (max-width: 560px) {
+    .boons .cards { flex-direction: column; align-items: center; gap: 16px; }
+    .boons .card { width: min(360px, 88vw); display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px; text-align: left; padding: 12px 16px; }
+    .boons .medal { grid-row: span 2; width: 68px; margin: 4px; }
+    .boons .card > b { align-self: end; } .boons .card > small { align-self: start; }
+  }
+  @media (prefers-reduced-motion: reduce) { .boons *, .boons, .potions .ic, .roster .ic, .touch .ic { animation: none !important; } }
 </style>
 </head>
 <body>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Icon sheet</title>
+<!-- Every UI icon at card, button and roster sizes: node tools/shot.mjs /tools/icons.html tools/out/icons.png -->
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 16px; background: #ffe9f6; font: 700 13px Fredoka, system-ui, sans-serif; color: #3a2346; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, 150px); gap: 12px; }
+  .cell { background: #fffbff; border: 4px solid #3a2346; border-radius: 16px; padding: 8px; text-align: center; }
+  .cell .big svg { width: 84px; height: 84px; }
+  .cell .row { display: flex; gap: 8px; justify-content: center; align-items: center; }
+  .cell .row svg { width: 28px; height: 28px; stroke-width: 6; }
+  .cell .row svg + svg { width: 16px; height: 16px; stroke-width: 8; }
+  .zoom .grid { grid-template-columns: repeat(auto-fill, 236px); } .zoom .cell .big svg { width: 200px; height: 200px; overflow: visible; outline: 1px dashed #c8b2ff; } .zoom .row { display: none !important; }
+</style>
+</head>
+<body>
+<div class="grid" id="g"></div>
+<script type="module">
+  if (location.search.includes('big')) document.body.classList.add('zoom');
+  import { icon, ICON_NAMES } from '../game/icons.js';
+  document.getElementById('g').innerHTML = ICON_NAMES.map(n => `<div class="cell"><div class="big">${icon(n)}</div><div class="row">${icon(n)}${icon(n)}</div>${n}</div>`).join('');
+</script>
+</body>
+</html>

@@ -97,6 +97,7 @@ export class TouchControls {
       if (b.aims) this.aim = null;
     }
   }
-  setLabel(id, html, lit) { const b = this.buttons.get(id); if (!b) return; b.el.firstChild.innerHTML = html; b.el.classList.toggle('lit', !!lit); }
+  // Called every frame, so the DOM is only touched when the label actually changes.
+  setLabel(id, html, lit) { const b = this.buttons.get(id); if (!b) return; if (b.html !== html) { b.html = html; b.el.firstChild.innerHTML = html; } b.el.classList.toggle('lit', !!lit); }
   endStep() { this.tapped.clear(); }
 }

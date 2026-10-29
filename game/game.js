@@ -24,6 +24,7 @@ import { Gore } from './gore.js';
 import { Hud } from './hud.js';
 import { defineSounds } from './sounds.js';
 import { rollBoons } from './boons.js';
+import { icon } from './icons.js';
 import { Bot } from './bot.js';
 import { Telemetry } from './telemetry.js';
 import { RAINBOW, goreChunk } from './models.js';
@@ -89,8 +90,8 @@ export class Game {
       { id: 'heavy', label: 'BONK', style: '--x:1.25;--y:1' },
       { id: 'dodge', label: 'ROLL', style: '--x:0;--y:1.25' },
       { id: 'grab', label: 'GRAB', style: '--x:2.3;--y:0' },
-      { id: 'special', label: '🌈', style: '--x:0;--y:2.3' },
-      { id: 'potion', label: '♥', style: '--x:2.3;--y:1' },
+      { id: 'special', label: icon('rainbow'), style: '--x:0;--y:2.3' },
+      { id: 'potion', label: icon('heart'), style: '--x:2.3;--y:1' },
       { id: 'lock', label: 'LOCK', cls: 'small', style: '--x:1.25;--y:2' },
     ]);
     this.coop = this.net ? new Coop(this, this.net) : null;
@@ -720,7 +721,7 @@ export class Game {
     b.apply(this.player);
     this.player.boons = [...(this.player.boons ?? []), b.id];
     this.telemetry.boon(b);
-    this.hud.hideBoons();
+    this.hud.hideBoons(i);
     this.offers = null;
     if (this.state === 'boon') this.state = 'play';
     this.gore.confettiBurst(this.player.x, 1.5, this.player.z, 30, 5);
@@ -988,8 +989,8 @@ export class Game {
     this.hud.update(dt);
     if (this.touch.active) {
       const pl = this.player;
-      this.touch.setLabel('special', pl.rage >= 100 ? '🌈' : `<small>${Math.floor(pl.rage)}%</small>`, pl.rage >= 100);
-      this.touch.setLabel('potion', `♥<small>${pl.potions}</small>`, pl.potions > 0 && pl.hp < pl.stats.maxHp * 0.5);
+      this.touch.setLabel('special', pl.rage >= 100 ? icon('rainbow') : `${icon('rainbow')}<small>${Math.floor(pl.rage)}%</small>`, pl.rage >= 100);
+      this.touch.setLabel('potion', `${icon('heart')}<small>${pl.potions}</small>`, pl.potions > 0 && pl.hp < pl.stats.maxHp * 0.5);
       this.touch.setLabel('grab', pl.holding ? 'THROW' : 'GRAB', !!pl.holding);
       this.touch.setLabel('parry', 'PARRY', this.threat < 0.45);
     }
