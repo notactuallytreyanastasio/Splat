@@ -30,7 +30,9 @@ export class DecalLayer {
     c.restore();
     this.dirty = true;
   }
+  // skip(x, z): true where nothing may stain (water).
   splat(x, z, r, color = '#d1002c', { dx = 0, dz = 0, speed = 0, gloss = true } = {}) {
+    if (this.skip?.(x, z)) return;
     this.paint(c => {
       c.fillStyle = color;
       const blobs = 3 + ((r * 20) | 0);

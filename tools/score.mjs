@@ -24,6 +24,10 @@ const SCENES = {
   spree: { song: 'garden', seconds: 70, keys: [[0, { intensity: 1, heat: 0, color: 1 }], [30, { heat: 0.4, color: 0.8 }], [40, { heat: 1.2, color: 0.3 }], [70, { heat: 1.2 }]],
     kills: [[4, 1], [6.5, 1], [9, 1], [12, 1], [12.6, 1], [13.1, 2], [13.9, 1], [14.5, 1], [15.2, 1], [16, 3], [16.8, 1], [17.5, 1],
       [24, 8], [24.2, 6], [24.4, 10], [45, 1], [45.5, 1], [46, 2], [46.6, 1], [47.4, 1], [48, 3], [49, 1], [50, 1], [51, 2], [52, 1], [60, 12]] },
+  pond: { song: 'pond', seconds: 40, keys: [[0, { intensity: 0.1, heat: 0, color: 1 }], [15, { intensity: 1 }]], kills: [[20, 1], [21, 1], [22, 3], [24, 1]] },
+  hive: { song: 'hive', seconds: 40, keys: [[0, { intensity: 0.1, heat: 0, color: 1 }], [15, { intensity: 1 }]], kills: [[20, 1], [21, 1], [22, 3], [24, 1]] },
+  koi: { song: 'koi', seconds: 30, keys: [[0, { intensity: 1, heat: 0 }]] },
+  queen: { song: 'queen', seconds: 30, keys: [[0, { intensity: 1, heat: 0 }]] },
   empressSpree: { song: 'empress', seconds: 30, keys: [[0, { intensity: 1, heat: 0 }]],
     kills: [[3, 1], [4, 1], [5, 2], [6, 1], [7, 1], [8, 3], [9, 1], [15, 6], [16, 1], [17, 1], [18, 2]] },
 };

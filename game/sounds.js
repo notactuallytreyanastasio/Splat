@@ -58,6 +58,24 @@ export function defineSounds(s) {
   s.define('bossdie', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 500, f1: 2600, dur: 0.7, vol: 0.16 }); s.tone(t, { type: 'square', f0: 660, f1: 3300, dur: 0.7, vol: 0.06 }); s.noise(t, { dur: 0.7, vol: 0.2, f0: 800, f1: 5000, q: 2 }); });
   s.define('clink', (s, t, o) => { s.tone(t, { type: 'sine', f0: 2093 * P(o), dur: 0.3, vol: 0.14 }); s.tone(t, { type: 'triangle', f0: 3136 * P(o), dur: 0.18, vol: 0.06 }); });
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
+  // The pond. Water is noise through a lowpass that opens and shuts; a plop is a sine that
+  // falls then rises (the bubble closing).
+  s.define('splash', (s, t, o) => { s.noise(t, { dur: 0.45, vol: 0.45, f0: 3200 * P(o), f1: 500, q: 0.8, type: 'lowpass' }); s.tone(t, { type: 'sine', f0: 700 * P(o), f1: 220 * P(o), dur: 0.09, vol: 0.25 }); s.tone(t + 0.07, { type: 'sine', f0: 380 * P(o), f1: 900 * P(o), dur: 0.1, vol: 0.14 }); });
+  s.define('croak', (s, t, o) => { for (let i = 0; i < 3; i++) s.tone(t + i * 0.07, { type: 'sawtooth', f0: 150 * P(o), f1: 95 * P(o), dur: 0.08, vol: 0.14, lp: [900, 900] }); });
+  s.define('hop', (s, t) => { s.tone(t, { type: 'sine', f0: 240, f1: 520, dur: 0.12, vol: 0.18 }); s.noise(t, { dur: 0.1, vol: 0.12, f0: 900, f1: 2400, q: 1 }); });
+  s.define('tongue', (s, t) => { s.tone(t, { type: 'triangle', f0: 300, f1: 1400, dur: 0.1, vol: 0.18 }); s.noise(t, { dur: 0.12, vol: 0.18, f0: 1800, f1: 5000, q: 2 }); s.tone(t + 0.1, { type: 'sine', f0: 900, f1: 200, dur: 0.18, vol: 0.12 }); });
+  s.define('gulp', (s, t, o) => { s.tone(t, { type: 'sine', f0: 320 * P(o), f1: 110 * P(o), dur: 0.16, vol: 0.4 }); s.tone(t + 0.12, { type: 'sine', f0: 180 * P(o), f1: 70 * P(o), dur: 0.2, vol: 0.3 }); });
+  s.define('flop', (s, t) => { s.thump(t, { f0: 120, f1: 40, dur: 0.35, vol: 0.55, body: 0.5 }); s.noise(t, { dur: 0.3, vol: 0.35, f0: 1400, f1: 200, q: 2, type: 'lowpass' }); s.tone(t + 0.05, { type: 'sine', f0: 500, f1: 260, dur: 0.12, vol: 0.12 }); });
+  s.define('breachrev', (s, t, o) => { s.noise(t, { dur: 1.0, vol: 0.3, f0: 200, f1: 2600 * P(o), q: 1.5, type: 'lowpass' }); for (let i = 0; i < 5; i++) s.tone(t + i * 0.16 / P(o), { type: 'sine', f0: 300 + i * 90, f1: 160, dur: 0.1, vol: 0.12 }); });
+  s.define('bubbles', (s, t) => { for (let i = 0; i < 7; i++) s.tone(t + i * 0.08 + Math.random() * 0.03, { type: 'sine', f0: 500 + Math.random() * 500, f1: 1200 + Math.random() * 600, dur: 0.07, vol: 0.12 }); });
+  // The hive. A bee is a buzzing saw through a resonant lowpass.
+  s.define('buzz', (s, t, o) => s.tone(t, { type: 'sawtooth', f0: 210 * P(o), f1: 240 * P(o), dur: 0.35, vol: 0.06, attack: 0.05, vib: [28, 40, 0], lp: [1600, 1600, 0, 4] }));
+  s.define('hivehit', (s, t) => { s.thump(t, { f0: 160, f1: 70, dur: 0.18, vol: 0.35, body: 0.6 }); s.noise(t, { dur: 0.25, vol: 0.2, f0: 800, f1: 300, q: 3, type: 'lowpass' }); s.tone(t, { type: 'sawtooth', f0: 260, f1: 330, dur: 0.4, vol: 0.06, vib: [30, 50, 0] }); });
+  s.define('hivebreak', (s, t) => { s.noise(t, { dur: 0.6, vol: 0.5, f0: 2400, f1: 200, q: 1, type: 'lowpass' }); s.thump(t, { f0: 110, f1: 35, dur: 0.5, vol: 0.5, body: 0.5 }); for (let i = 0; i < 4; i++) s.tone(t + 0.1 + i * 0.07, { type: 'sawtooth', f0: 300 + i * 60, f1: 180, dur: 0.25, vol: 0.05, vib: [32, 60, 0] }); });
+  s.define('puff', (s, t) => { s.noise(t, { dur: 0.5, vol: 0.55, f0: 4000, f1: 300, q: 0.7, type: 'lowpass' }); s.thump(t, { f0: 95, f1: 32, dur: 0.4, vol: 0.55, body: 0.45 }); s.tone(t, { type: 'sine', f0: 900, f1: 120, dur: 0.18, vol: 0.2 }); });
+  s.define('royal', (s, t) => { [392, 494, 587, 784].forEach((f, i) => s.tone(t + i * 0.11, { type: 'square', f0: f, dur: 0.22, vol: 0.06, lp: [2400, 2400] })); s.tone(t + 0.45, { type: 'sawtooth', f0: 220, f1: 260, dur: 0.9, vol: 0.1, vib: [24, 60, 0], lp: [1400, 1400, 0, 3] }); });
+  s.define('stingvolley', (s, t, o) => { for (let i = 0; i < 3; i++) s.noise(t + i * 0.04, { dur: 0.08, vol: 0.18, f0: 3000 * P(o), f1: 6000 * P(o), q: 3 }); s.tone(t, { type: 'sawtooth', f0: 330 * P(o), f1: 200 * P(o), dur: 0.2, vol: 0.08, vib: [30, 40, 0] }); });
+  s.define('dive', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 900, f1: 160, dur: 0.55, vol: 0.14, vib: [30, 60, 0], lp: [2200, 2200] }); s.noise(t, { dur: 0.55, vol: 0.2, f0: 5000, f1: 400, q: 1 }); });
 
   // The mix, measured with tools/mix.mjs (short-term loudness, loudest 50 ms, dBFS through
   // the master chain). Windows: core combat hits about -21, big moments -15 to -19, UI
@@ -81,6 +99,11 @@ export function defineSounds(s) {
     bossdie: { db: 5.5, voices: 1, duck: [0.85, 1.6, 2.5] }, screech: { db: 4.5, voices: 2 }, summon: { db: 5.5, voices: 1 },
     scythedraw: { db: 3.5, voices: 1 }, scythe: { db: 4.5, voices: 1 }, chargerev: { db: -1.5, voices: 1 }, bellow: { db: 1.5, voices: 1 },
     novacharge: { db: 4.5, voices: 1 }, nova: { db: 1.5, voices: 1 }, brood: { db: 0, voices: 1 },
+    // Untested by meter so far: trims are first guesses beside their nearest relatives.
+    splash: { db: 2, voices: 3, group: GORE }, croak: { db: 5, voices: 2 }, hop: { db: 6, voices: 3 }, tongue: { db: 4, voices: 2 },
+    gulp: { db: 2, voices: 2 }, flop: { db: -1.5, voices: 1, duck: [0.4, 0.2, 0.6] }, breachrev: { db: 2, voices: 1 }, bubbles: { db: 4, voices: 1 },
+    buzz: { db: 3, voices: 3 }, hivehit: { db: 1, voices: 2 }, hivebreak: { db: 0, voices: 2, duck: [0.45, 0.2, 0.6] }, puff: { db: -1, voices: 3, group: GORE, duck: [0.35, 0.15, 0.5] },
+    royal: { db: 2, voices: 1, duck: [0.6, 0.9, 1.2] }, stingvolley: { db: 4, voices: 2 }, dive: { db: 1.5, voices: 1 },
   };
   for (const [name, mix] of Object.entries(MIX)) {
     if (!s.recipes[name]) throw new Error(`sounds: mix names unknown sound ${name}`);

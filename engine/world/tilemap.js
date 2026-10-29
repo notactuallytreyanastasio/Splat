@@ -1,12 +1,27 @@
 // Character grid. Tile (tx, tz) covers world [tx, tx+1) x [tz, tz+1). Which characters are
 // solid is the game's business; dynamic blockers (closed doors) layer on top.
 export class TileMap {
-  constructor(rows, { solid = '#', void: voidChars = ' ' } = {}) {
+// Water is neither floor nor wall: walkers treat it as a wall, but a body knocked or thrown
+// across it flies over it (and sinks if it stops there), and sight and shots cross it.
+  constructor(rows, { solid = '#', void: voidChars = ' ', water = '' } = {}) {
     this.h = rows.length;
     this.w = Math.max(...rows.map(r => r.length));
     this.rows = rows.map(r => r.padEnd(this.w, ' '));
     this.solidChars = new Set(solid + voidChars);
     this.blocked = new Uint8Array(this.w * this.h);
+    this.waterChars = new Set(water);
+    this.hasWater = this.rows.some(r => [...r].some(c => this.waterChars.has(c)));
+  }
+  isWater(tx, tz) { return this.inside(tx, tz) && this.waterChars.has(this.rows[tz][tx]); }
+  waterAt(x, z) { return this.isWater(Math.floor(x), Math.floor(z)); }
+  // Can something on foot stand here?
+  walkable(tx, tz) { return !this.isSolid(tx, tz) && !this.isWater(tx, tz); }
+  // A walker's line: water blocks it too.
+  walkLos(x0, z0, x1, z1, step = 0.25) {
+    if (!this.hasWater) return this.los(x0, z0, x1, z1, step);
+    const dx = x1 - x0, dz = z1 - z0, n = Math.ceil(Math.hypot(dx, dz) / step);
+    for (let i = 1; i < n; i++) { const x = x0 + (dx * i) / n, z = z0 + (dz * i) / n; if (this.solidAt(x, z) || this.waterAt(x, z)) return false; }
+    return true;
   }
   inside(tx, tz) { return tx >= 0 && tz >= 0 && tx < this.w && tz < this.h; }
   at(tx, tz) { return this.inside(tx, tz) ? this.rows[tz][tx] : ' '; }

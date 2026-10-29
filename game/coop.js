@@ -5,7 +5,7 @@
 //   host       -> "w"  world snapshot (enemies, loot, doors, xp), 15/s
 //   host       -> "e"  effect events (hits, kills, banners, targeted hurt/teleport), batched
 //   guest      -> "a"  action requests (swing, whirl, grab, throw) that the host resolves
-import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, STRIKES } from './actors.js';
+import { Player, Enemy, Mantis, Koi, Queen, Hive, Puffball, Pollen, Gem, Potion, Breakable, STRIKES } from './actors.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 export const TINTS = [
@@ -14,7 +14,9 @@ export const TINTS = [
   { helm: 0xfff1a1, ring: 0x7bdc8f },
   { helm: 0xc8b2ff, ring: 0xffa04d },
 ];
-const KIND = e => (e instanceof Mantis ? 'M' : e instanceof Enemy ? 'E' : e instanceof Pollen ? 'P' : e instanceof Gem ? 'G' : e instanceof Potion ? 'O' : e instanceof Breakable ? 'B' : null);
+// Creatures: E bug, H hive, and the bosses M (Empress), K (koi), Q (queen). F a puffball.
+const CREATURE = new Set(['E', 'H', 'M', 'K', 'Q']), BOSS = new Set(['M', 'K', 'Q']);
+const KIND = e => (e instanceof Mantis ? 'M' : e instanceof Koi ? 'K' : e instanceof Queen ? 'Q' : e instanceof Hive ? 'H' : e instanceof Puffball ? 'F' : e instanceof Enemy ? 'E' : e instanceof Pollen ? 'P' : e instanceof Gem ? 'G' : e instanceof Potion ? 'O' : e instanceof Breakable ? 'B' : null);
 
 export class Coop {
   constructor(game, net) {
@@ -141,11 +143,11 @@ export class Coop {
       if (e.dead || e instanceof Player) continue;
       const k = KIND(e);
       if (!k) continue;
-      const row = [e.nid, k, k === 'E' ? e.type : k === 'G' ? e.value : k === 'B' ? e.kind : k === 'P' ? (e.heart ? 1 : 0) : 0, r2(e.x), r2(e.y), r2(e.z)];
-      if (k === 'E' || k === 'M') {
+      const row = [e.nid, k, k === 'E' ? e.type : k === 'G' ? e.value : k === 'B' ? e.kind : k === 'P' ? e.kind : k === 'F' ? (e.ready ? 1 : 0) : 0, r2(e.x), r2(e.y), r2(e.z)];
+      if (CREATURE.has(k)) {
         const flags = (e.elite ? 1 : 0) | (e.active ? 2 : 0) | (e.launched ? 4 : 0) | (e.baby ? 8 : 0) | (e.stun > 0.2 ? 16 : 0) | (e.phase2 ? 32 : 0);
         row.push(r2(e.facing), r2(e.spinYaw), r2(e.tumble), r2(e.squash), r2(e.leanX), r2(e.leanZ), e.action ?? 0, r2(e.actionP), r2(e.flash), flags, Math.ceil(e.hp), e.carried?.pid ?? (e.carried ? this.id : 0));
-        if (k === 'M') row.push(e.state, e.next ?? 0, r2(e.lockX ?? 0), r2(e.lockZ ?? 0), r2(e.stateT));
+        if (BOSS.has(k)) row.push(e.state, e.next ?? 0, r2(e.lockX ?? 0), r2(e.lockZ ?? 0), r2(e.stateT));
       }
       ents.push(row);
     }
@@ -172,7 +174,8 @@ export class Coop {
       if (e.target && e.snapT) { const ds = Math.max(0.02, now - e.snapT); e.vx = (x - e.target[3]) / ds; e.vz = (z - e.target[5]) / ds; }
       e.snapT = now;
       e.target = row;
-      if (k === 'E' || k === 'M') {
+      if (k === 'F' && e.ready !== !!type) { if (type) { e.ready = true; e.head.scale.setScalar(1); } else e.pop(); }
+      if (CREATURE.has(k)) {
         const [, , , , , , f, spin, tumble, squash, lx, lz, action, ap, flash, flags, hp, carrier] = row;
         Object.assign(e, { tf: f, spinYaw: spin, tumble, squash, leanX: lx, leanZ: lz, action: action || null, actionP: ap, flash: Math.max(e.flash, flash), hp, active: !!(flags & 2), baby: !!(flags & 8), stun: flags & 16 ? 1 : 0 });
         // The host scales hp (more knights, later laps); a proxy built from defaults must not
@@ -183,7 +186,7 @@ export class Coop {
         const carriedBy = carrier ? this.player(carrier) : null;
         if (carriedBy !== g.player || !carriedBy) e.carried = carriedBy ?? null;
         if (k === 'E') e.state = action === 'windup' ? 'windup' : 'chase';
-        if (k === 'M') { [e.state, e.next, e.lockX, e.lockZ, e.stateT] = row.slice(18); e.phase2 = !!(flags & 32); }
+        if (BOSS.has(k)) { [e.state, e.next, e.lockX, e.lockZ, e.stateT] = row.slice(18); e.phase2 = !!(flags & 32); }
       }
     }
     for (const e of g.world.entities) if (e.proxy && !(e instanceof Player) && !seen.has(e.nid)) e.dead = true;
@@ -203,7 +206,11 @@ export class Coop {
     let e;
     if (k === 'E') e = new Enemy(g, x, z, type, { elite: !!(row[15] & 1) });
     else if (k === 'M') e = new Mantis(g, x, z, -1);
-    else if (k === 'P') e = new Pollen(g, x, z, 0, 0, 0, { heart: !!type });
+    else if (k === 'K') e = new Koi(g, x, z, -1);
+    else if (k === 'Q') e = new Queen(g, x, z, -1);
+    else if (k === 'H') e = new Hive(g, x, z, -1);
+    else if (k === 'F') e = new Puffball(g, x, z);
+    else if (k === 'P') e = new Pollen(g, x, z, 0, 0, 0, { heart: type === 1, bubble: type === 2, sting: type === 3 });
     else if (k === 'G') e = new Gem(g, x, z, type);
     else if (k === 'O') e = new Potion(g, x, z);
     else e = new Breakable(g, x, z, type);

@@ -105,7 +105,7 @@ export class KillSong {
     }
   }
   voice(t, n, accent, machine) {
-    const s = this.music.sfx, m = this.music, f = N(n), out = this.out, v = accent ? 1.35 : 1;
+    const s = this.music.sfx, m = this.music, f = N(n + (m.song.transpose ?? 0)), out = this.out, v = accent ? 1.35 : 1;
     if (machine) {
       s.tone(t, { wave: m.wave('kpulse', PULSE), f0: f, dur: 0.16, attack: 0.002, vol: 0.05 * v, out });
     } else if (m.song.voice === 'harpsi') {

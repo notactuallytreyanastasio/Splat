@@ -1,5 +1,7 @@
 {
  "name": "The Pastel Garden",
+ "next": "pond",
+ "cleared": "the garden is quiet now",
  "rows": [
   "                      ####################",
   " ################     #*........*.......j#",

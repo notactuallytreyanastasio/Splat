@@ -8,7 +8,7 @@ export class FlowField {
     this.dist = new Int32Array(map.w * map.h);
     this.tx = -1; this.tz = -1;
   }
-  passable(x, z) { return !this.map.isSolid(x, z); }
+  passable(x, z) { return this.map.walkable(x, z); }
   neighbours(x, z, fn) {
     for (const [dx, dz] of N8) {
       const nx = x + dx, nz = z + dz;

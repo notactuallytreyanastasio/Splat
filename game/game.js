@@ -20,8 +20,8 @@ import { KillSong } from './killsong.js';
 import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
 import { disposeTree } from '../engine/render/dispose.js';
-import { parseLevel, buildLevelMeshes, bumpMushroom, updateMushrooms } from './level.js';
-import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES, MOVES } from './actors.js';
+import { parseLevel, buildLevelMeshes, bumpMushroom, updateMushrooms, updateWater } from './level.js';
+import { Player, Enemy, Mantis, Koi, Queen, Hive, Puffball, Pollen, Gem, Potion, Breakable, ENEMIES, MOVES } from './actors.js';
 import { Gore } from './gore.js';
 import { Juice, BUD_HATCH } from './juice.js';
 import { Hud } from './hud.js';
@@ -35,12 +35,16 @@ import { Coop, TINTS } from './coop.js';
 import { Tutorial } from './tutorial.js';
 import { Pause } from './pause.js';
 import { quickStart } from './settings.js';
-import { lapMods, lapTheme, shader, loadRun, saveRun, clearRun } from './laps.js';
+import { lapMods, lapTheme, shader, loadRun, saveRun, clearRun, FIRST_STAGE, markReached } from './laps.js';
 
 const STREAKS = { 2: 'Double Tap!', 3: 'Triple Treat!', 4: 'Bug Splat Party!', 5: 'Petal Massacre!', 7: 'RAINBOW CARNAGE!', 10: 'EXTERMINATRIX!!', 15: 'APOCALYPSE PICNIC!!!' };
 const ROOM_NAMES = ['the Petal Foyer', 'the Mushroom Court', 'the Beetle Den', "the Empress's Bower"];
 const BIG = { heavy: 1, finisher: 1, wall: 1, scythe: 1, rising: 1, shadow: 1 };
 // The hit counter's ranks (Player.hits; it resets when you are hurt or after 2 s of no hits).
+// Levels a run has usually earned by the start of each stage, for one started from the
+// title's shortcut (skill-0.5 bot runs end the garden at LV 8).
+const STAGE_LEVELS = { pond: 7, hive: 12 };
+const STAGE_NO = { garden: 0, pond: 1, hive: 2 };
 const RANKS = [[5, 'NICE'], [10, 'SHINOBI'], [20, 'SHADOW DANCER'], [35, 'KAGE'], [50, 'GHOST OF THE GARDEN']];
 
 export class Game {
@@ -50,6 +54,9 @@ export class Game {
     this.guest = !!this.net && !this.net.isHost;
     this.seed = opts.seed ?? ((Math.random() * 1e9) | 0);
     this.levelName = opts.levelName ?? 'garden';
+    // A stage of the run: its name card, room names, boss song and the stage after it.
+    this.stageInfo = { title: levelJson.title ?? 'THE PASTEL GARDEN', sub: levelJson.sub ?? 'squish every pretty thing', rooms: levelJson.roomNames ?? ROOM_NAMES, next: levelJson.next ?? null, song: levelJson.song ?? 'garden', bossSong: levelJson.bossSong ?? 'empress',
+      tip: levelJson.tip, go: levelJson.go, cleared: levelJson.cleared, tier: levelJson.tier ?? 0, subs: levelJson.roomSubs ?? [] };
     this.rng = new RNG(this.seed);
     // Which lap of the run this is (laps.js). The tutorial is always lap 1.
     this.lap = opts.tutorial ? 1 : Math.max(1, Math.floor(+opts.lap || 1));
@@ -78,7 +85,10 @@ export class Game {
     this.world = new World(this.map);
     this.world.onImpact = (a, b, rel) => this.impact(a, b, rel);
     this.world.onTile = (e, hit) => this.tileHit(e, hit);
-    this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed), { floor: shader(this.theme.floor), hedge: shader(this.theme.hedge) });
+    // A stage's own look (the hive's wax walls) under the lap's hour (night, frost).
+    const look = levelJson.look ?? {}, lf = shader(this.theme.floor), lh = shader(this.theme.hedge), kf = shader(look.floor), kh = shader(look.hedge);
+    if (look.sky && this.lap <= 1) this.scene.background.set(look.sky);
+    this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed), { floor: h => lf(kf(h)), hedge: h => lh(kh(h)) });
     this.flow = new FlowField(this.map);
     this.gore = new Gore(this);
     this.juice = new Juice(this);
@@ -143,7 +153,7 @@ export class Game {
     this.applyAudioMode();
     if (this.guest || this.tutorial) return;
     if (this.lap > 1) this.fx('lap', { n: this.lap });
-    else this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' });
+    else this.fx('bn', { t: this.stageInfo.title, s: this.stageInfo.sub + (this.net ? ', together' : '') });
   }
   // ------------------------------------------------------------------ laps
   // Sky, light and (via buildLevelMeshes) floor and hedges for this lap's hour.
@@ -158,11 +168,12 @@ export class Game {
   // taken, then level, xp and potions put back exactly (Nectar Stash's +2 potions must not
   // be paid out twice). A new lap starts at full health.
   restoreRun() {
-    const run = loadRun(this.lap);
+    const run = loadRun(this.lap, this.levelName);
     this.runTotals = { kills: run?.kills ?? 0, time: run?.time ?? 0 };
-    // ?lap=N typed by hand starts that lap with nothing; it is not a record-setting run.
-    this.lapEarned = this.lap === 1 || !!run;
-    if (!run) return;
+    // ?lap=N or ?level=pond typed by hand starts there with nothing; it is not a record-setting
+    // run. A later stage started fresh (the title's shortcut) gets the levels a run would have.
+    this.lapEarned = (this.lap === 1 && this.levelName === FIRST_STAGE) || !!run;
+    if (!run) { if (!this.tutorial && !this.lapEarned && this.opts.start == null) this.pendingLevels = STAGE_LEVELS[this.levelName] ?? 0; return; }
     const p = this.player;
     for (const id of run.boons ?? []) { const b = boonById(id); if (b) { b.apply(p); p.boons = [...(p.boons ?? []), b.id]; } }
     this.level_ = run.level ?? 1; this.xp = run.xp ?? 0; this.gems = run.gems ?? 0;
@@ -171,12 +182,12 @@ export class Game {
     this.owedBoons = 0; this.pendingBoons = run.owed ?? 0; // offered once the lap is under way
   }
   // What the next lap needs to rebuild this knight. Every peer saves its own.
-  saveRunFor(lap) {
+  saveRunFor(lap, stage = FIRST_STAGE) {
     const p = this.player, c = this.telemetry.c;
     // Boons earned but not picked: the Empress's 40 gems often level you up during her death
     // scene, when no picker may open, or a co-op picker was still waiting at the win.
     const owed = (this.owedBoons ?? 0) + (this.offers ? 1 : 0) + (this.queuedBoons ?? 0);
-    saveRun({ lap, boons: p.boons ?? [], owed, level: this.level_, xp: this.xp, gems: this.gems, potions: p.potions,
+    saveRun({ lap, stage, boons: p.boons ?? [], owed, level: this.level_, xp: this.xp, gems: this.gems, potions: p.potions,
       kills: this.runTotals.kills + (this.squad?.k ?? c.kills), time: Math.round(this.runTotals.time + this.telemetry.t) });
   }
   // all -> sfx only -> silent. Remembered per browser.
@@ -190,7 +201,7 @@ export class Game {
     this.sfx.unlock();
     // main is the final output (music and effects); the sound-volume setting lives on master.
     if (this.sfx.master) this.sfx.master.gain.value = this.audioMode === 'off' ? 0 : this.sfx.volume;
-    if (this.audioMode === 'all') this.music.play('garden'); else this.music.stop();
+    if (this.audioMode === 'all') this.music.play(this.stageInfo.song); else this.music.stop();
     this.hud.audioIcon?.(this.audioMode);
   }
   // Music follows the fight: calm while exploring, full band in a locked room, her own
@@ -201,7 +212,7 @@ export class Game {
     const fighting = this.level.rooms.some(r => r.active);
     // Her tune holds through her death scene (the crown is out) until the fanfare.
     const boss = (this.boss && !this.boss.dead) || this.trophies.length > 0;
-    this.music.play(this.state === 'win' ? 'victory' : boss ? 'empress' : 'garden');
+    this.music.play(this.state === 'win' ? 'victory' : boss ? this.stageInfo.bossSong : this.stageInfo.song);
     const target = this.state === 'dead' ? 0 : fighting ? 1 : 0.15;
     this.music.intensity += (target - this.music.intensity) * Math.min(1, dt * 1.5);
     // Combat heat (or the noir peak, which the blender reaches without heat) drives the machine.
@@ -254,8 +265,9 @@ export class Game {
       case 'tp': this.player.x = d.x; this.player.z = d.z; this.player.vx = this.player.vz = 0; return;
       case 'rez': return this.revive(d.x, d.z);
       case 'win': return this.win(d);
+      case 'stage': return this.stageClear(d);
       case 'lose': return this.lose(d);
-      case 'restart': return this.restart(false, d.seed, d.lap);
+      case 'restart': return this.restart(false, d.seed, d.lap, d.stage);
       case 'lap': return this.lapFx(d);
       case 'parried': return this.parriedFx(d);
       case 'bmp': return this.bumpFx(d);
@@ -265,6 +277,9 @@ export class Game {
       case 'sb': return this.stickyFx(d);
       case 'rc': return this.ricochetFx(d);
       case 'yank': return this.yankFx(d);
+      case 'spl': return this.splashFx(d.x, d.z, d.s);
+      case 'puf': return this.puffFx(d);
+      case 'sk': return this.skipFx(d);
     }
   }
 
@@ -284,15 +299,16 @@ export class Game {
       room.depth = depth.get(room.id) ?? 99;
       room.enemies = [];
       room.waves = [];
-      if (room.combat) { room.index = combatIndex; room.name = ROOM_NAMES[combatIndex] ?? `garden ${combatIndex + 1}`; combatIndex++; }
+      if (room.combat) { room.index = combatIndex; room.name = this.stageInfo.rooms[combatIndex] ?? `room ${combatIndex + 1}`; combatIndex++; }
       if (!spawn) continue; // a guest mirrors the host's enemies instead of making its own
       for (const sp of room.spawns) {
         if (sp.type === 'jar') { this.world.add(new Breakable(this, sp.x, sp.z, 'jar')); continue; }
+        if (sp.type === 'puff') { this.world.add(new Puffball(this, sp.x, sp.z)); continue; }
         room.enemies.push(this.spawnEnemy(sp.type, sp.x, sp.z, room, room.index ?? 0));
       }
       // Roguelike layer: later rooms get reinforcement waves rolled from the seed.
       if (room.combat && !room.boss && room.index > 0) {
-        const types = room.spawns.map(s => s.type).filter(t => ENEMIES[t]);
+        const types = room.spawns.map(s => s.type).filter(t => ENEMIES[t] && t !== 'bee');
         const n = Math.round(types.length * this.rng.float(0.7, 1.0));
         room.waves.push(Array.from({ length: n }, () => this.rng.pick(types)));
         if (room.index >= 2) room.waves.push(Array.from({ length: n + 2 }, () => this.rng.pick([...types, 'butterfly'])));
@@ -300,17 +316,20 @@ export class Game {
       // Later laps: one more wave per room per lap (two at most), the first room included.
       if (room.combat && !room.boss) {
         const types = room.spawns.map(s => s.type).filter(t => ENEMIES[t]);
-        for (let w = 0; w < this.lapMods.waves && types.length; w++) room.waves.push(Array.from({ length: types.length + 1 + room.index }, () => this.rng.pick([...types, 'butterfly', 'ladybug'])));
+        for (let w = 0; w < Math.min(3, this.lapMods.waves + this.stageInfo.tier) && types.length; w++) room.waves.push(Array.from({ length: types.length + 1 + room.index }, () => this.rng.pick([...types, 'butterfly', 'ladybug'])));
       }
     }
   }
   spawnEnemy(type, x, z, room, index = 0) {
     const L = this.lapMods;
-    if (type === 'mantis') { const m = this.world.add(new Mantis(this, x, z, room.id)); m.maxHp = m.hp = Math.round(m.hp * L.boss); return m; }
-    const elite = this.rng.chance(0.06 + index * 0.05 + L.elite);
+    if (type === 'hive') { const h = this.world.add(new Hive(this, x, z, room.id)); h.maxHp = h.hp = Math.round(h.hp * L.hp * (1 + 0.3 * this.stageInfo.tier)); return h; }
+    if (type === 'mantis' || type === 'koi' || type === 'queen') { const m = this.world.add(new ({ mantis: Mantis, koi: Koi, queen: Queen }[type])(this, x, z, room.id)); m.maxHp = m.hp = Math.round(m.hp * L.boss * (1 + 0.6 * this.stageInfo.tier)); return m; }
+    // Later stages of a run (the level's tier) meet a knight with more levels and boons.
+    const tier = this.stageInfo.tier;
+    const elite = this.rng.chance(0.06 + index * 0.05 + L.elite + tier * 0.08);
     // More knights, more bugs; later laps, tougher and quicker bugs.
     const e = this.world.add(new Enemy(this, x, z, type, { elite, room: room.id, index }));
-    e.maxHp = e.hp = Math.round(e.hp * (1 + 0.4 * ((this.net?.peers.size ?? 1) - 1)) * L.hp);
+    e.maxHp = e.hp = Math.round(e.hp * (1 + 0.4 * ((this.net?.peers.size ?? 1) - 1)) * L.hp * (1 + 0.6 * tier));
     e.speed0 *= L.speed;
     return e;
   }
@@ -319,7 +338,8 @@ export class Game {
   // dropped by a bug dying against a hedge or a mushroom would otherwise sit inside it, out
   // of reach of a knight (and the bot, which walked into the hedge after it forever).
   openSpot(x, z, r = 0.35) {
-    const clear = (px, pz) => !this.map.solidAt(px, pz) && [[r, 0], [-r, 0], [0, r], [0, -r]].every(([ox, oz]) => !this.map.solidAt(px + ox, pz + oz));
+    const dry = (px, pz) => !this.map.solidAt(px, pz) && !this.map.waterAt(px, pz);
+    const clear = (px, pz) => dry(px, pz) && [[r, 0], [-r, 0], [0, r], [0, -r]].every(([ox, oz]) => dry(px + ox, pz + oz));
     if (clear(x, z)) return { x, z };
     for (let ring = 1; ring <= 8; ring++) for (let k = 0; k < ring * 8; k++) {
       const a = (k / (ring * 8)) * Math.PI * 2, px = x + Math.cos(a) * ring * 0.25, pz = z + Math.sin(a) * ring * 0.25;
@@ -378,13 +398,13 @@ export class Game {
     if (room.boss) {
       this.boss = room.enemies.find(e => e.boss);
       if (this.boss) { this.boss.set('intro'); this.boss.cooldown = 0.6; this.fx('bi', { id: this.boss.nid }); }
-    } else this.fx('bn', { t: room.name?.toUpperCase() ?? 'AMBUSH', s: `${room.enemies.length} pretty little lives` });
+    } else this.fx('bn', { t: room.name?.toUpperCase() ?? 'AMBUSH', s: this.stageInfo.subs[room.index] ?? `${room.enemies.length} pretty little lives` });
     this.events.emit('roomStart', room);
   }
   // Reinforcements hatch: a bud sprouts where each bug will be, shivers, and bursts open
   // with the bug hopping out. The room stays locked while any bud is still closed.
   spawnWave(room, types) {
-    const tiles = room.tiles.filter(([x, z]) => !this.map.isSolid(x, z) && this.players.every(k => Math.hypot(x + 0.5 - k.x, z + 0.5 - k.z) > 5));
+    const tiles = room.tiles.filter(([x, z]) => this.map.walkable(x, z) && this.players.every(k => Math.hypot(x + 0.5 - k.x, z + 0.5 - k.z) > 5));
     const pool = tiles.length ? tiles : room.tiles.slice();
     for (const t of types) {
       const i = this.rng.int(0, pool.length - 1), [x, z] = pool[i];
@@ -420,10 +440,10 @@ export class Game {
     const alive = this.players.find(k => !k.ghost);
     for (const k of this.players) if (k.ghost && alive) this.fx('rez', { to: k.pid, x: alive.x + 0.8, z: alive.z });
     // The Empress gets her death scene before the curtain.
-    if (room.boss) { this.later(3.6, () => { if (this.state !== 'dead') this.fx('win', this.squadStats()); }); return; }
+    if (room.boss) { this.later(3.6, () => { if (this.state !== 'dead') this.fx(this.stageInfo.next ? 'stage' : 'win', this.squadStats()); }); return; }
     this.fx('bn', { t: 'CLEARED!', s: 'smack the cocoon for prizes' });
     const c = room.center;
-    const tile = room.tiles.map(([x, z]) => ({ x: x + 0.5, z: z + 0.5 })).filter(t => !this.map.solidAt(t.x, t.z))
+    const tile = room.tiles.filter(([x, z]) => this.map.walkable(x, z) && this.map.walkable(x + 1, z) && this.map.walkable(x - 1, z)).map(([x, z]) => ({ x: x + 0.5, z: z + 0.5 }))
       .sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z))[0];
     this.world.add(new Breakable(this, tile.x, tile.z, 'cocoon'));
   }
@@ -453,6 +473,8 @@ export class Game {
     }
     // Later laps: everything that hurts a knight hurts more (bugs, pollen, the Empress).
     if (isPlayer && this.lap > 1) info.amount *= this.lapMods.dmg;
+    // Later stages: a knight arrives with more levels and boons, so everything hits harder.
+    if (isPlayer && this.stageInfo.tier && info.team !== 'hazard') info.amount *= 1 + 0.35 * this.stageInfo.tier;
     info.amount = Math.max(1, Math.round(info.amount));
     if (isPlayer && target.parryT > 0 && info.source && !(info.source instanceof Pollen)) { this.parry(target, info.source); return false; }
     if (isPlayer && target.remote) {
@@ -471,7 +493,7 @@ export class Game {
       if (this.player.hp <= 0) this.playerDie(info);
       return true;
     }
-    if (target instanceof Breakable) return true;
+    if (target instanceof Breakable || target.prop) return true;
     if (info.team === 'player') { target.lastHitBy = src ?? this.player; }
     this.fx('hit', { id: target.nid, a: info.amount, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 0, kind: info.kind, c: info.crit ? 1 : 0, src: info.team === 'player' ? (src?.pid ?? this.localId) : 0 });
     if (target.hp <= 0 && !target.dead) this.kill(target, info);
@@ -527,8 +549,10 @@ export class Game {
   kill(t, info) {
     t.dead = true;
     if (t.carried) { t.carried.holding = null; t.carried = null; }
-    const overkill = -t.hp > t.maxHp * 0.3 || ['heavy', 'finisher', 'rising', 'shadow', 'fang', 'impact', 'wall', 'trample', 'scythe', 'boom', 'land'].includes(info.kind) || t.speed > 9 || t.boss;
-    this.fx('kill', { id: t.nid, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 4, o: overkill ? 1 : 0, tm: info.team === 'player' ? 1 : 0, ch: t.chain || 0, bw: (info.team === 'player' && (t.lastHitBy ?? this.player).stats.bowling) || undefined });
+    const overkill = -t.hp > t.maxHp * 0.3 || ['heavy', 'finisher', 'rising', 'shadow', 'fang', 'impact', 'wall', 'trample', 'scythe', 'boom', 'land', 'dunk'].includes(info.kind) || t.speed > 9 || t.boss;
+    // Dunked or swallowed: no body comes apart, it goes under (or down a koi).
+    const gone = info.kind === 'dunk' || info.kind === 'gulp' ? info.kind : undefined;
+    this.fx('kill', { id: t.nid, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 4, o: overkill ? 1 : 0, tm: info.team === 'player' ? 1 : 0, ch: t.chain || 0, bw: (info.team === 'player' && (t.lastHitBy ?? this.player).stats.bowling) || undefined, dk: gone });
     if (t.sticky) this.stickyBoom(t); // a bomb killed before it lands still goes off: chain reactions
     this.streak++; this.streakT = 2.6;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
@@ -537,8 +561,10 @@ export class Game {
     this.telemetry.kill(t, info, overkill);
     this.events.emit('kill', { target: t, info, overkill });
     if (info.team === 'player' && MOVES[info.kind]) this.kageKill();
-    const xp = (t.def?.xp ?? 1) * (t.elite ? 3 : 1);
-    for (let i = 0; i < xp; i += i < 4 ? 1 : 5) this.world.add(new Gem(this, t.x, t.z, xp - i >= 5 && i >= 4 ? 5 : 1));
+    const xp = (t.def?.xp ?? 1) * (t.elite ? 3 : 1) * (info.kind === 'dunk' ? 2 : 1); // a dunk pays double
+    // The prize from a bug that went under bobs up on the nearest bank.
+    const drop = this.map.waterAt(t.x, t.z) ? (this.bankNear(t.x, t.z) ?? t) : t;
+    for (let i = 0; i < xp; i += i < 4 ? 1 : 5) this.world.add(new Gem(this, drop.x, drop.z, xp - i >= 5 && i >= 4 ? 5 : 1));
     if (Math.random() < (t.elite ? 0.5 : 0.08)) { const o = this.openSpot(t.x + fx.f(-0.5, 0.5), t.z + fx.f(-0.5, 0.5)); this.world.add(new Potion(this, o.x, o.z)); }
     const splitRoom = this.level.rooms[t.room];
     if (t.def?.split && splitRoom?.active) {
@@ -562,6 +588,7 @@ export class Game {
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
     if (t.boss) return this.bossDeathFx(t, d);
+    if (d.dk) return this.goneFx(t, d);
     // Corpses are only projectiles on the host, where damage is decided.
     t.armed = false;
     this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null, bowling: d.bw ?? 0 }, !!d.o);
@@ -703,6 +730,243 @@ export class Game {
     this.sfx.play('boing', { pitch: Math.min(1.8, 0.9 + d.c * 0.12), gap: 0.05 });
     this.gore.confettiBurst(d.tx + 0.5 + d.nx * 0.6, 1.9, d.tz + 0.5 + d.nz * 0.6, 8, 4, [0xffffff, 0xfff1a1, 0x9ff0d4]);
     this.view.shake(0.12);
+  }
+  // ------------------------------------------------------------------ water (host)
+  // A body down on the water: skimming fast off a throw or a Batter Up it skips like a
+  // stone (three times at most); anything slower goes under. The pond is a kill zone that
+  // only knockback can reach: walkers treat it as a wall (Creature.waterSolid).
+  onWater(e) {
+    if (this.guest) return;
+    if (e instanceof Player) { const b = this.bankNear(e.x, e.z); if (b) { e.x = b.x; e.z = b.z; e.vx = e.vz = 0; } return; }
+    if (e.boss || e.dead) return;
+    if (e.speed > 8 && (e.skips ?? 0) < 3 && e.thrownBy === 'player') {
+      e.skips = (e.skips ?? 0) + 1;
+      e.vy = 3.4; e.vx *= 0.8; e.vz *= 0.8;
+      e.chain = (e.chain || 0) + 1; e.impacted.clear();
+      this.fx('sk', { x: r2(e.x), z: r2(e.z), n: e.skips });
+      return;
+    }
+    this.dunk(e);
+  }
+  dunk(e) {
+    const x = e.x, z = e.z, koi = this.boss instanceof Koi && !this.boss.dead && this.boss.active ? this.boss : null;
+    e.inv = 0; e.stun = 0;
+    this.damage(e, { amount: Math.max(1, e.hp), team: 'player', kind: 'dunk', knock: 0, source: e.lastHitBy });
+    if (!e.dead) return;
+    this.telemetry.c.dunks = (this.telemetry.c.dunks ?? 0) + 1;
+    this.fx('spl', { x: r2(x), z: r2(z), s: 1 });
+    // Fed to the koi: she goes for it, and chokes.
+    const fed = koi && this.roomOf({ x, z }) === koi.room && koi.feed(x, z);
+    this.say(fed ? 'FED THE FISH!' : e.chain >= 2 ? `DUNKED x${e.chain}!` : 'DUNKED!', x, 2, z, { cls: 'pinball', scale: 1.3, life: 1.1 });
+    this.loop.freeze(0.06);
+  }
+  skipFx(d) {
+    this.splashFx(d.x, d.z, 0.5);
+    this.sfx.play('splash', { pitch: 1.3 + d.n * 0.2 });
+    this.floaters.spawn(d.n > 1 ? `SKIP x${d.n}!` : 'SKIP!', d.x, 1.6, d.z, { cls: 'boing', scale: 1 + d.n * 0.1, life: 0.8 });
+  }
+  // Water thrown up and rings on the surface. Every peer.
+  splashFx(x, z, size = 1) {
+    this.gore.confettiBurst(x, 0.1, z, Math.round(14 + 22 * size), 3 + 4 * size, [0xffffff, 0xd6f3ff, 0xa6dcff, 0x7cc9d6]);
+    for (const [r0, dur] of [[0.3, 0.5], [0.15, 0.75], [0.05, 1]].slice(0, size >= 1 ? 3 : 2)) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r0 * size + 0.2, r0 * size + 0.32, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, -0.08, z); ring.renderOrder = 2;
+      this.scene.add(ring);
+      this.slashes.push({ g: ring, t: 0, dur: dur * Math.max(0.7, size), ring: true });
+    }
+    if (size >= 1) { this.sfx.play('splash'); this.view.shake(0.12 * size); }
+  }
+  // A bug that went under, or down a koi: it sinks (or vanishes), the water closes over it.
+  goneFx(t, d) {
+    const root = t.rig.root;
+    t.onRemove = () => {};
+    if (this.audioMode === 'all') this.killSong.kill(true);
+    this.gore.spray(t.x, 0.3, t.z, 0, 0, 10, 3, t.def?.blood ?? [0xd4002e]);
+    if (d.dk === 'gulp') { root.parent?.remove(root); this.sfx.play('gulp'); return; }
+    (this.sinking ??= []).push({ root, t: 0, spin: fx.f(-4, 4) });
+  }
+  updateSinking(dt) {
+    for (let i = (this.sinking?.length ?? 0) - 1; i >= 0; i--) {
+      const s = this.sinking[i];
+      s.t += dt;
+      s.root.position.y -= dt * (0.6 + s.t * 3);
+      s.root.rotation.y += s.spin * dt; s.root.rotation.z += dt * 1.5;
+      if (s.t > 0.2 && Math.random() < dt * 14) this.gore.confettiBurst(s.root.position.x + fx.f(-0.2, 0.2), -0.05, s.root.position.z + fx.f(-0.2, 0.2), 2, 1.2, [0xffffff, 0xd6f3ff]);
+      if (s.t > 0.9) { s.root.parent?.remove(s.root); disposeTree(s.root); this.sinking.splice(i, 1); }
+    }
+  }
+  // The nearest open bank tile to (x, z) (walkable, with walkable neighbours), or null.
+  bankNear(x, z, room = null) {
+    const map = this.map, tx0 = Math.floor(x), tz0 = Math.floor(z);
+    let best = null, bd = Infinity;
+    for (let r = 1; r <= 12 && !best; r++) for (let tz = tz0 - r; tz <= tz0 + r; tz++) for (let tx = tx0 - r; tx <= tx0 + r; tx++) {
+      if (!map.walkable(tx, tz) || map.at(tx, tz) === '+') continue;
+      if (room != null && this.level.regionAt(tx, tz) !== room) continue;
+      if (![[1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => map.walkable(tx + a, tz + b) || map.isWater(tx + a, tz + b))) continue;
+      const d = Math.hypot(tx + 0.5 - x, tz + 0.5 - z);
+      if (d < bd) { bd = d; best = { x: tx + 0.5, z: tz + 0.5 }; }
+    }
+    return best;
+  }
+  pondNear(koi, x, z) {
+    let best = null, bd = Infinity;
+    for (const [tx, tz] of koi.pool()) {
+      if (!koi.inPool(tx + 0.5, tz + 0.5)) continue;
+      const d = Math.hypot(tx + 0.5 - x, tz + 0.5 - z);
+      if (d < bd) { bd = d; best = { x: tx + 0.5, z: tz + 0.5 }; }
+    }
+    return best;
+  }
+  // Where a frog will come down: a clear spot near the knight, in the frog's own room.
+  hopSpot(f, pl, d) {
+    const room = this.roomOf(f);
+    for (let i = 0; i < 10; i++) {
+      const a = Math.atan2(f.x - pl.x, f.z - pl.z) + fx.f(-1.3, 1.3), r = fx.f(1.2, 2.6) + (i > 5 ? 1.5 : 0);
+      let x = pl.x + Math.sin(a) * r, z = pl.z + Math.cos(a) * r;
+      const far = Math.hypot(x - f.x, z - f.z);
+      if (far > 6.5) { x = f.x + (x - f.x) / far * 6.5; z = f.z + (z - f.z) / far * 6.5; }
+      if (far < 1.5) continue;
+      const ok = [[0, 0], [0.45, 0], [-0.45, 0], [0, 0.45], [0, -0.45]].every(([ox, oz]) => this.map.walkable(Math.floor(x + ox), Math.floor(z + oz)));
+      if (ok && this.level.regionAt(Math.floor(x), Math.floor(z)) === room) return { x, z };
+    }
+    return null;
+  }
+  // ------------------------------------------------------------------ Old Gold (host)
+  koiSplash(k, s) { this.fx('spl', { x: r2(k.x), z: r2(k.z), s }); }
+  koiGulp(k) {
+    this.fx('sx', { n: 'gulp' });
+    this.say('GULP!', k.x, 2.2, k.z, { cls: 'splat', scale: 1.5 });
+    this.fx('spl', { x: r2(k.x), z: r2(k.z), s: 1.2 });
+  }
+  // On her way over the bank she flattens knights and swallows bugs.
+  koiTrample(k) {
+    if (k.y > 2.2) return;
+    for (const p of this.players) if (!p.ghost && !k.trampled.has(p) && Math.hypot(p.x - k.x, p.z - k.z) < k.radius + p.radius + 0.2) {
+      k.trampled.add(p);
+      this.damage(p, { amount: 20, dirX: k.lockX ?? 0, dirZ: k.lockZ ?? 1, knock: 16, team: 'boss', source: k });
+    }
+    for (const e of this.world.query(k.x, k.z, k.radius + 0.2, e => e.team === 'enemy' && e !== k && !e.carried && !(e instanceof Pollen) && e.hittable)) {
+      this.damage(e, { amount: 99999, team: 'boss', kind: 'gulp', knock: 0, source: k });
+      this.say('GULP!', e.x, 2, e.z, { cls: 'splat' });
+    }
+  }
+  koiLand(k, wall) {
+    this.fx('slam', { x: r2(k.x), z: r2(k.z), r: 2 });
+    this.fx('sx', { n: 'flop' });
+    this.fx('sh', { a: 0.5, k: 0.04 });
+    for (const p of this.players) if (!p.ghost && Math.hypot(p.x - k.x, p.z - k.z) < 1.8 + p.radius) {
+      const a = Math.atan2(p.x - k.x, p.z - k.z);
+      this.damage(p, { amount: 14, dirX: Math.sin(a), dirZ: Math.cos(a), knock: 12, team: 'boss', source: k });
+    }
+    if (wall) this.onBossWall(k, { nx: -(k.lockX ?? 0), nz: -(k.lockZ ?? 1) });
+    else this.say(k.leapWhy === 'choke' ? 'CHOKING!' : 'BEACHED!', k.x, 3, k.z, { cls: 'pinball', scale: 1.5, life: 1.3 });
+  }
+  koiBubbles(k, pl, n) {
+    const base = Math.atan2(pl.x - k.x, pl.z - k.z), count = 5, spread = 0.95;
+    for (let i = 0; i < count; i++) {
+      const a = base + (i - (count - 1) / 2) * (spread / (count - 1)) * 2 + (n - 1) * 0.12;
+      this.world.add(new Pollen(this, k.x + Math.sin(a) * 1.2, k.z + Math.cos(a) * 1.2, Math.sin(a) * 6.5, Math.cos(a) * 6.5, 11, { bubble: true }));
+    }
+    this.fx('sx', { n: 'spit' });
+    this.fx('spl', { x: r2(k.x), z: r2(k.z), s: 0.6 });
+  }
+  // Frogs come flying out of the pond, landing near the knight: more to fight, and more to feed her.
+  koiSummon(k, n) {
+    const room = this.level.rooms[k.room], pl = this.nearestPlayer(k.x, k.z) ?? this.player;
+    for (let i = 0; i < n; i++) {
+      const f = this.spawnEnemy('frog', k.x, k.z, room, 0);
+      f.active = true; room.enemies.push(f);
+      const spot = this.hopSpot(f, pl, 0) ?? this.bankNear(k.x + fx.f(-3, 3), k.z + fx.f(-3, 3), k.room) ?? { x: pl.x, z: pl.z };
+      const T = 0.9, kk = 0.4 / (1 - Math.exp(-0.4 * T));
+      f.x = k.x; f.z = k.z; f.y = 0.2;
+      f.vx = (spot.x - f.x) * kk; f.vz = (spot.z - f.z) * kk; f.vy = 13.5;
+      f.hopX = spot.x; f.hopZ = spot.z; f.hopT = T; f.hopping = true; f.set('hop'); f.cooldown = 1;
+    }
+    this.fx('spl', { x: r2(k.x), z: r2(k.z), s: 1.4 });
+    this.fx('bn', { t: '', s: 'FROGS! (she will eat anything you dunk)', d: 1.8 });
+  }
+  // ------------------------------------------------------------------ the hive (host)
+  hiveSpawn(h) {
+    const room = this.level.rooms[h.room];
+    const a = Math.random() * Math.PI * 2, e = this.spawnEnemy('bee', h.x + Math.sin(a) * 0.9, h.z + Math.cos(a) * 0.9, room, room.index ?? 0);
+    e.active = true; e.vx = Math.sin(a) * 5; e.vz = Math.cos(a) * 5; e.stun = 0.25;
+    room.enemies.push(e); h.bees.push(e);
+    this.fx('sx', { n: 'buzz', o: { pitch: 1.2 + Math.random() * 0.3 } });
+    this.fx('cf', { x: r2(h.x), y: 1.2, z: r2(h.z), n: 6, p: 2, c: [0xffd84d, 0xffe08a] });
+  }
+  // A puffball goes off: everything near it is thrown outward (a bug becomes a projectile:
+  // it can pinball, splat and bowl), neighbouring puffballs go off a beat later, and a
+  // knight in it gets a light shove.
+  puffBoom(p, info = {}) {
+    if (this.guest || !p.ready) return;
+    p.pop();
+    const x = p.x, z = p.z, r = 2.6;
+    const by = info.source instanceof Player ? info.source : info.source?.lastHitBy ?? this.player;
+    this.fx('puf', { x: r2(x), z: r2(z), r });
+    this.telemetry.c.puffs = (this.telemetry.c.puffs ?? 0) + 1;
+    this.pending.push(() => {
+      for (const e of this.world.query(x, z, r, e => e !== p && !(e instanceof Pollen) && (e.hittable || e instanceof Player))) {
+        const ox = e.x - x, oz = e.z - z, l = Math.hypot(ox, oz) || 1, dx = ox / l, dz = oz / l;
+        if (e.prop) { if (e.ready) this.later(0.14, () => this.puffBoom(e, { source: by })); continue; }
+        // A knight only feels the middle of it: a shove and a sting, not a punishment.
+        if (e instanceof Player) { if (!e.ghost && l < 1.9) this.damage(e, { amount: 7, dirX: dx, dirZ: dz, knock: 12, team: 'hazard', source: p }); continue; }
+        if (e.team !== 'enemy') continue;
+        this.damage(e, { amount: e.boss ? 80 : 38, dirX: dx, dirZ: dz, knock: 15, lift: 6, stun: 1, team: 'player', kind: 'boom', source: by });
+      }
+    });
+  }
+  puffFx(d) {
+    this.gore.confettiBurst(d.x, 0.6, d.z, 70, 9, [0xf4e6ff, 0xc8b2ff, 0xffffff, 0xe2d4ff]);
+    for (let i = 0; i < 26; i++) this.gore.confetti.spawn(d.x + fx.f(-0.8, 0.8), fx.f(0.3, 1.4), d.z + fx.f(-0.8, 0.8), fx.f(-2.5, 2.5), fx.f(0.5, 2), fx.f(-2.5, 2.5), { color: fx.pick([0xf4e6ff, 0xd9c8ff, 0xfffbff]), size: fx.f(0.12, 0.24), life: 1.6, gravity: 0.6, drag: 1.6 });
+    this.gore.decals.splat(d.x, d.z, d.r * 0.45, '#d9c8ff');
+    for (const [r0, col, dur] of [[0.5, 0xc8b2ff, 0.35], [0.3, 0xffffff, 0.22]]) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r0 + 0.25, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(d.x, 0.3, d.z);
+      this.scene.add(ring);
+      this.slashes.push({ g: ring, t: 0, dur, ring: true });
+    }
+    this.floaters.spawn('POOF!', d.x, 2.4, d.z, { cls: 'boing', scale: 1.4, life: 0.9 });
+    this.sfx.play('puff');
+    this.view.shake(0.35);
+    this.loop.freeze(0.04);
+    this.addHeat(0.08);
+  }
+  // ------------------------------------------------------------------ the Queen (host)
+  queenStings(q, pl, n) {
+    if (q.phase2) {
+      // A spinning ring: gaps you can stand in, turning a little each burst.
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * Math.PI * 2 + n * 0.22;
+        this.world.add(new Pollen(this, q.x + Math.sin(a) * 1.3, q.z + Math.cos(a) * 1.3, Math.sin(a) * 7, Math.cos(a) * 7, 10, { sting: true }));
+      }
+    } else {
+      const base = Math.atan2(pl.x - q.x, pl.z - q.z) + (n - 1) * 0.18;
+      for (let i = 0; i < 5; i++) {
+        const a = base + (i - 2) * 0.22;
+        this.world.add(new Pollen(this, q.x + Math.sin(a) * 1.3, q.z + Math.cos(a) * 1.3, Math.sin(a) * 8.5, Math.cos(a) * 8.5, 10, { sting: true }));
+      }
+    }
+    this.fx('sx', { n: 'stingvolley', o: { pitch: 1 + n * 0.1 } });
+  }
+  // Her dive lands. Anything in the ring is hurt; puffballs in it go off under her.
+  queenSlam(q) {
+    const r = 2.1;
+    this.fx('slam', { x: r2(q.x), z: r2(q.z), r });
+    this.fx('sh', { a: 0.55, k: 0.05 });
+    for (const p of this.players) if (!p.ghost && Math.hypot(p.x - q.x, p.z - q.z) < r + p.radius) {
+      const a = Math.atan2(p.x - q.x, p.z - q.z);
+      this.damage(p, { amount: 18, dirX: Math.sin(a), dirZ: Math.cos(a), knock: 14, team: 'boss', source: q });
+    }
+    const puffs = this.world.query(q.x, q.z, r, e => e.prop && e.ready);
+    for (const p of puffs) this.puffBoom(p, { source: this.player });
+    if (puffs.length) this.say('GROUNDED!', q.x, 3.6, q.z, { cls: 'pinball', scale: 1.6, life: 1.4 });
+    return puffs.length > 0;
+  }
+  queenCall(q, n) {
+    const room = this.level.rooms[q.room], hives = room.enemies.filter(e => e instanceof Hive && !e.dead);
+    if (hives.length) for (const h of hives) for (let i = 0; i < n; i++) this.hiveSpawn(h);
+    else for (let i = 0; i < n + 2; i++) this.hiveSpawn({ x: q.x, z: q.z, room: q.room, bees: [] });
+    this.fx('bn', { t: '', s: 'TO ME, MY DARLINGS (pop a puffball under her dive)', d: 1.8 });
   }
   wallSlam(e, hit) {
     if (this.guest || (e.lastSlam != null && e.age - e.lastSlam < 0.3)) return;
@@ -942,7 +1206,7 @@ export class Game {
       this.sfx.play('shriek');
       this.view.shake(0.35);
       this.gore.confettiBurst(b.x, 2.6, b.z, 26, 5, [0xff9ecb, 0xfff1a1, 0xc6f5d2]);
-      this.hud.bossCard('EMPRESS MANTIS', 'she wants her babies back', 2.1);
+      this.hud.bossCard(b.def.title ?? 'EMPRESS MANTIS', b.def.sub ?? 'she wants her babies back', 2.1);
     });
   }
   // Half health: eyes go red, wings flare, she roars. Her attacks get the hot telegraphs.
@@ -1291,6 +1555,16 @@ export class Game {
     this.hud.banner('EXTERMINATED', 'the garden is quiet now', 3);
     setTimeout(() => this.hud.showEnd(true), 2200);
   }
+  // A boss down with a stage after it: the report card for this stage, then onward.
+  stageClear(d) {
+    if (this.state === 'win') return;
+    this.squad = d;
+    this.state = 'win'; this.stageDone = true;
+    this.telemetry.win();
+    markReached(this.stageInfo.next);
+    this.hud.banner('STAGE CLEAR', `onward. something is waiting.`, 3);
+    setTimeout(() => this.hud.showEnd(true), 2200);
+  }
   lose(d) {
     if (this.state === 'dead') return;
     this.squad = d;
@@ -1300,16 +1574,18 @@ export class Game {
   }
   // Every restart is a reload. A won run goes on to the next lap with the build saved for
   // it; anything else (a death, a squad wipe) is a fresh run at lap 1 with nothing carried.
-  restart(nextSeed = true, seed, lap = 1) {
+  // The next stage of a won run is a reload too, with the build saved for that stage.
+  restart(nextSeed = true, seed, lap = 1, stage = FIRST_STAGE) {
     const q = new URLSearchParams(location.search);
     if (seed != null) q.set('seed', seed);
     else if (nextSeed) q.set('seed', (this.seed + 1) >>> 0);
-    if (lap > 1) {
-      this.saveRunFor(lap);
-      q.set('lap', lap);
+    if (stage !== FIRST_STAGE) q.set('level', stage); else q.delete('level');
+    if (lap > 1) q.set('lap', lap); else q.delete('lap');
+    if (lap > 1 || stage !== FIRST_STAGE) {
+      this.saveRunFor(lap, stage);
       // The carried build replaces any debug start: no skipping rooms, no boons twice.
       q.delete('start'); q.delete('boons');
-    } else { clearRun(); q.delete('lap'); }
+    } else clearRun();
     location.search = q.toString();
   }
   // A lap's seed: different waves and elites every lap, but the same for every peer.
@@ -1416,11 +1692,13 @@ export class Game {
       for (const e of this.world.entities) if (!(e instanceof Player)) { e.desiredX = e.desiredZ = 0; e.springs?.(dt); }
       if ((this.input.tapped('Enter', 'Space') || this.againTapped) && !this.guest) {
         this.againTapped = false;
-        const won = this.state === 'win', lap = won ? this.lap + 1 : 1;
-        const seed = won ? this.lapSeed(lap) : (this.seed + 1) >>> 0;
+        // Won: the next stage, or after the last one the next lap. Lost: a fresh run.
+        const won = this.state === 'win', next = this.stageDone ? this.stageInfo.next : FIRST_STAGE;
+        const lap = won ? this.lap + (this.stageDone ? 0 : 1) : 1, stage = won ? next : FIRST_STAGE;
+        const seed = won ? this.lapSeed(lap * 7 + STAGE_NO[stage]) : (this.seed + 1) >>> 0;
         // The host is about to reload: get the order to the guests before the page goes.
-        if (this.net) { this.coop.broadcast('restart', { seed, lap }); this.coop.flush(); this.restart(false, seed, lap); }
-        else this.restart(false, seed, lap);
+        if (this.net) { this.coop.broadcast('restart', { seed, lap, stage }); this.coop.flush(); this.restart(false, seed, lap, stage); }
+        else this.restart(false, seed, lap, stage);
       }
     }
     this.coop?.update(dt);
@@ -1521,6 +1799,8 @@ export class Game {
     // listed until the next update; posing it would drag its flung limbs back to the rig.
     for (const e of this.world.entities) if (!e.dead) e.sync?.(sdt);
     updateMushrooms(this.levelMeshes, sdt);
+    updateWater(this.levelMeshes, this.time);
+    if (this.sinking?.length) this.updateSinking(sdt);
     if (this.slowmo > 0) { this.slowmo -= dt / this.loop.speed; this.loop.timeScale = this.net ? 1 : 0.3; }
     else this.loop.timeScale += (1 - this.loop.timeScale) * Math.min(1, dt * 4);
     // A ghost watches a living friend.

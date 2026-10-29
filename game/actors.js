@@ -19,6 +19,11 @@ export const ENEMIES = {
   caterpillar: { name: 'Caterpillar', model: () => M.caterpillar(5), hp: 46, radius: 0.45, mass: 1.4, speed: 2.1, ai: 'melee', reach: 1.0, windup: 0.5, attackTime: 0.3, recover: 0.6, dmg: 11, lunge: 6, xp: 3, grab: true, split: 'grub', blood: [0xd4002e, 0x7dffc0, 0xb6ffd9] },
   grub: { name: 'Grub', model: () => M.caterpillar(2), hp: 14, radius: 0.3, mass: 0.6, speed: 3.4, ai: 'melee', reach: 0.8, windup: 0.3, attackTime: 0.2, recover: 0.5, dmg: 5, lunge: 7, xp: 1, grab: true, blood: [0xd4002e, 0x7dffc0] },
   butterfly: { name: 'Butterfly', model: () => M.butterfly(), hp: 22, radius: 0.4, mass: 0.7, speed: 2.8, ai: 'ranged', range: [4.5, 7.5], fireEvery: 1.8, windup: 0.5, dmg: 10, xp: 3, grab: true, blood: [0xd4002e, 0xc8b2ff, 0xffe066] },
+  // The pond: frogs never walk. They hop (over water too) onto a ring you can see, and from
+  // a few metres they lash a tongue that drags a knight in.
+  frog: { name: 'Pond Frog', model: () => M.frog(), hp: 52, radius: 0.45, mass: 1.5, speed: 0, ai: 'hopper', reach: 5.2, windup: 0.5, dmg: 11, xp: 4, grab: true, blood: [0xd4002e, 0x8fe08a, 0xd4002e] },
+  // The hive: bees come out of hives in twos and threes, orbit, and dive. Anything kills one.
+  bee: { name: 'Bee', model: () => M.bee(), hp: 9, radius: 0.28, mass: 0.45, speed: 5.0, ai: 'melee', reach: 1.5, windup: 0.42, attackTime: 0.22, recover: 0.5, dmg: 5, lunge: 12, xp: 1, grab: true, cry: 'buzz', blood: [0xd4002e, 0xffd84d] },
   beetle: { name: 'Rhino Beetle', model: () => M.beetle(), hp: 140, radius: 0.75, mass: 3.2, speed: 1.8, ai: 'brute', reach: 2.0, windup: 0.85, attackTime: 0.2, recover: 1.1, dmg: 24, xp: 8, grab: 'stunned', armor: 0.5, blood: [0xd4002e, 0x8fa8ff, 0xd4002e] },
 };
 
@@ -54,6 +59,9 @@ export class Creature extends Entity {
   // not count, or the lunge flags it launched, the AI drops the attack, and it never bites.
   get launched() { return this.thrownBy != null && this.speed > this.launchSpeed; }
   get controllable() { return this.stun <= 0 && !this.airborne && !this.launched && !this.carried; }
+  // Under its own power (on foot or on the wing) water is a wall; knocked, thrown or
+  // hopping, a body goes over it. A flier does not sink unless it was knocked down.
+  get waterSolid() { return this.controllable && !this.swims; }
   takeDamage(info) {
     if (this.dead || this.inv > 0 || this.carried) return false;
     this.hp -= info.amount;
@@ -82,7 +90,7 @@ export class Creature extends Entity {
       const d = Math.exp(-fr * dt);
       this.vx *= d; this.vz *= d;
     }
-    if (!this.launched) { this.impacted.clear(); if (!this.airborne && this.stun <= 0) { this.thrownBy = null; this.chain = 0; this.ricochets = 0; } }
+    if (!this.launched) { this.impacted.clear(); if (!this.airborne && this.stun <= 0) { this.thrownBy = null; this.chain = 0; this.ricochets = 0; this.skips = 0; } }
     this.world.move(this, dt);
     if (this.airborne) {
       this.vy -= 30 * dt;
@@ -91,12 +99,14 @@ export class Creature extends Entity {
       if (this.y <= 0) {
         this.y = 0;
         const impact = -this.vy;
-        if (impact > 7) { this.vy = impact * 0.32; this.game.onLand(this, impact); }
+        if (impact > 7 && !this.hopping) { this.vy = impact * 0.32; this.game.onLand(this, impact); }
         else { this.vy = 0; this.tumble = 0; }
         this.squashV -= impact * 0.8;
       }
     } else this.tumble *= Math.exp(-12 * dt);
     if (sp > this.launchSpeed && !this.airborne) this.spinYaw += sp * dt * 1.6;
+    // Down on the water: fast enough, it skips like a stone; otherwise it goes under.
+    if (this.game.map.hasWater && !this.airborne && !this.swims && !this.carried && !this.dead && (!this.flying || !this.controllable) && this.game.map.waterAt(this.x, this.z)) this.game.onWater(this);
   }
   springs(dt) {
     this.squashV += (-(this.squash - 1) * 260 - this.squashV * 14) * dt;
@@ -210,6 +220,7 @@ export class Player extends Creature {
     for (const m of [ring, pip]) { m.position.y = 0.035; m.renderOrder = 2; this.rig.root.add(m); }
   }
   get controllable() { return this.state !== 'dodge' && this.stun <= 0; }
+  get waterSolid() { return true; } // a knight never goes in the pond, however hard it is hit
   get guest() { return this.game.guest && !this.remote; }
   // Dismemberment takes the rig apart; a revived knight needs a new one.
   rebuild() {
@@ -480,7 +491,8 @@ export class Enemy extends Creature {
     const g = this.game, pl = g.nearestPlayer(this.x, this.z);
     this.stateT += dt;
     if (this.carried) {
-      this.action = null;
+      this.action = null; this.hopping = false;
+      if (this.state === 'hop') this.set('chase');
       if (this.carryT > 0.5 && Math.random() < dt * 3) g.gore.drip(this);
       this.springs(dt);
       return;
@@ -488,8 +500,10 @@ export class Enemy extends Creature {
     this.cooldown -= dt;
     this.desiredX = this.desiredZ = 0;
     if (this.active && this.controllable && pl && !pl.dead) this.think(dt, pl);
+    else if (this.state === 'hop') { this.action = 'hop'; this.actionP = this.stateT / this.hopT; this.faceToward(this.hopX, this.hopZ, dt, 10); }
     else if (!this.controllable && this.state !== 'idle') { this.set('chase'); this.action = null; }
     this.physics(dt);
+    if (this.state === 'hop' && !this.airborne && this.stateT > 0.15) this.land();
     this.springs(dt);
     if (this.launched && this.thrownBy === 'player' && Math.random() < dt * 40) this.game.gore.trail(this);
     // A sticky bomb that never touched anything still goes off once it stops flying.
@@ -499,7 +513,7 @@ export class Enemy extends Creature {
   // Steering toward the player: direct when visible, flow field otherwise.
   chaseDir(pl) {
     const g = this.game;
-    if (g.map.los(this.x, this.z, pl.x, pl.z)) {
+    if (g.map.walkLos(this.x, this.z, pl.x, pl.z)) {
       const dx = pl.x - this.x, dz = pl.z - this.z, l = Math.hypot(dx, dz) || 1;
       return { x: dx / l, z: dz / l };
     }
@@ -521,7 +535,7 @@ export class Enemy extends Creature {
           this.set('windup');
           this.lockX = (pl.x - this.x) / d; this.lockZ = (pl.z - this.z) / d;
           if (def.ai === 'brute') this.tele = this.game.telegraphCircle(this.x + this.lockX * 1.3, this.z + this.lockZ * 1.3, 1.7, this.windup);
-          this.game.fx('sx', { n: 'windup', o: { pitch: def.ai === 'brute' ? 0.5 : 1.3 } });
+          this.game.fx('sx', { n: def.cry ?? 'windup', o: { pitch: def.ai === 'brute' ? 0.5 : 1.3 } });
         }
       } else if (this.state === 'windup') {
         this.action = 'windup'; this.actionP = this.stateT / this.windup;
@@ -549,6 +563,8 @@ export class Enemy extends Creature {
       } else if (this.state === 'recover') {
         if (this.stateT >= def.recover) { this.set('chase'); this.cooldown = fx.f(0.3, 0.9); }
       }
+    } else if (def.ai === 'hopper') {
+      this.hopperThink(dt, pl, d);
     } else if (def.ai === 'ranged') {
       const [near, far] = def.range;
       this.faceToward(pl.x, pl.z, dt);
@@ -574,6 +590,75 @@ export class Enemy extends Creature {
     }
   }
   onWall(hit) { if (hit.speed > 6 && this.thrownBy === 'player') this.game.wallSlam(this, hit); }
+  // ---------------------------------------------------------------- the frog
+  hopperThink(dt, pl, d) {
+    const g = this.game, def = this.def;
+    if (this.state === 'idle' || this.state === 'chase') {
+      this.state = 'chase'; this.action = null;
+      this.faceToward(pl.x, pl.z, dt, 4);
+      if (this.cooldown > 0) return;
+      // In tongue range and in sight: lash. Otherwise hop to somewhere near the knight.
+      if (d > 2 && d < def.reach && g.map.los(this.x, this.z, pl.x, pl.z) && Math.random() < 0.6) {
+        this.set('windup');
+        this.lockX = (pl.x - this.x) / d; this.lockZ = (pl.z - this.z) / d;
+        g.telegraphLine(this.x, this.z, this.lockX, this.lockZ, def.reach, 0.7, this.windup);
+        g.fx('sx', { n: 'croak', o: { pitch: 1.1 } });
+        return;
+      }
+      const spot = g.hopSpot(this, pl, d);
+      if (!spot) { this.cooldown = 0.5; return; }
+      this.set('crouch'); this.hopX = spot.x; this.hopZ = spot.z;
+      g.telegraphCircle(spot.x, spot.z, 1.3, 0.3 + 0.7);
+    } else if (this.state === 'crouch') {
+      this.action = 'crouch'; this.actionP = this.stateT / 0.3;
+      this.faceToward(this.hopX, this.hopZ, dt, 16);
+      if (this.stateT >= 0.3) {
+        // A ballistic arc of 0.7s to the marked spot: up at 10.5, gravity 30. Air drag is
+        // 0.4/s (Creature.physics), so the launch speed makes up what the drag takes.
+        const T = 0.7, dx = this.hopX - this.x, dz = this.hopZ - this.z, k = 0.4 / (1 - Math.exp(-0.4 * T));
+        this.hopT = T; this.hopping = true;
+        this.vx = dx * k; this.vz = dz * k; this.vy = 10.5;
+        this.set('hop');
+        g.fx('sx', { n: 'hop' });
+      }
+    } else if (this.state === 'windup') {
+      this.action = 'windup'; this.actionP = this.stateT / this.windup;
+      this.faceToward(this.x + this.lockX, this.z + this.lockZ, dt, 20);
+      this.flash = Math.max(this.flash, 0.25 + 0.25 * Math.sin(this.stateT * 40)); this.flashColor = 0xff5f9e;
+      if (this.stateT >= this.windup) { this.set('tongue'); this.hitDone = false; g.fx('sx', { n: 'tongue' }); }
+    } else if (this.state === 'tongue') {
+      // The tongue shoots out over 0.12s and is back by 0.4s. Whatever it touches on the
+      // way out is caught: a knight is dragged to the frog's lips.
+      this.action = 'tongue'; this.actionP = this.stateT / 0.4;
+      const reach = def.reach * Math.min(1, this.stateT / 0.12);
+      if (!this.hitDone && this.stateT < 0.16) for (const k of g.players) {
+        if (k.ghost) continue;
+        const rx = k.x - this.x, rz = k.z - this.z, along = rx * this.lockX + rz * this.lockZ, off = Math.abs(rx * this.lockZ - rz * this.lockX);
+        if (along > 0 && along < reach + k.radius && off < 0.35 + k.radius) {
+          this.hitDone = true;
+          if (g.damage(k, { amount: Math.round(def.dmg * this.dmgMul), dirX: -this.lockX, dirZ: -this.lockZ, knock: Math.min(22, (along - 1) * 6), team: 'enemy', source: this })) g.fx('sx', { n: 'gulp', o: { pitch: 1.4 } });
+          break;
+        }
+      }
+      if (this.stateT >= 0.4) { this.set('recover'); this.action = null; }
+    } else if (this.state === 'recover') {
+      if (this.stateT >= 0.5) { this.set('chase'); this.cooldown = fx.f(0.5, 1.3); }
+    }
+  }
+  land() {
+    const g = this.game;
+    this.hopping = false; this.action = null;
+    this.set('recover');
+    this.vx *= 0.2; this.vz *= 0.2;
+    this.squashV -= 9;
+    // Swatted out of the air: no slam, it just comes down.
+    if (this.thrownBy === 'player') return;
+    g.slam(this.x, this.z, 1.3);
+    for (const k of g.players) if (!k.ghost && Math.hypot(k.x - this.x, k.z - this.z) < 1.3 + k.radius) {
+      const a = Math.atan2(k.x - this.x, k.z - this.z);
+      g.damage(k, { amount: Math.round(this.def.dmg * this.dmgMul), dirX: Math.sin(a), dirZ: Math.cos(a), knock: 9, team: 'enemy', source: this });
+    }
+  }
 }
 
 // ------------------------------------------------------------------ boss
@@ -725,14 +810,384 @@ export class Mantis extends Creature {
   }
 }
 
+// ------------------------------------------------------------------ Old Gold, the koi
+// She lives in the pond and cannot be reached there. She comes out three ways: a breach
+// across the bank that leaves her flopping on dry land; a bug dunked in her pond, which
+// she swallows, chokes on, and flops out onto the nearest bank; and a burst of bubbles from
+// the surface, which a parry sends back at her. Thrown bugs hit her for double.
+const KOI_DEEP = -1.0, KOI_SURFACE = -0.45;
+export class Koi extends Creature {
+  constructor(game, x, z, room) {
+    super(game, x, z, M.koi());
+    this.def = { name: 'Old Gold', title: 'OLD GOLD', sub: 'the pond is hers. so is everything in it.', speed: 0, blood: [0xd4002e, 0xff8a3d, 0xfff3e0], xp: 40 };
+    this.team = 'enemy'; this.room = room; this.boss = true; this.swims = true;
+    // Immovable: knights and bugs shoving her must not push a beached koi into a hedge.
+    this.radius = 1.0; this.mass = 1e4; this.armor = 0.8; this.launchSpeed = 30;
+    this.maxHp = this.hp = Math.round(1150 * (game.difficulty ?? 1));
+    this.state = 'idle'; this.stateT = 0; this.cooldown = 1.5; this.active = false;
+    this.phase2 = false; this.pattern = 0; this.feedCd = 0;
+    this.y = KOI_DEEP; this.collides = false;
+    // Her shadow on the water while she is under it.
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color: 0x1d4a66, transparent: true, opacity: 0.45, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2; this.shadow.scale.set(1.5, 3.4, 1); this.shadow.renderOrder = 2;
+    this.rig.root.add(this.shadow);
+  }
+  get submerged() { return this.y < KOI_SURFACE - 0.2; }
+  get hittable() { return !this.dead && !this.submerged; }
+  set hittable(v) {}
+  get controllable() { return true; }
+  grabbable() { return false; }
+  set(state) { this.state = state; this.stateT = 0; }
+  pool() {
+    if (!this._pool) { const r = this.game.level.rooms[this.room]; this._pool = r.tiles.filter(([x, z]) => this.game.map.isWater(x, z)); }
+    return this._pool;
+  }
+  // Her middle and a body-width around it are all water.
+  inPool(x, z, m = 0.55) { const map = this.game.map; return [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]].every(([ox, oz]) => map.waterAt(x + ox, z + oz)); }
+  takeDamage(info) {
+    if (this.submerged) return false;
+    // A thrown bug hurts most; a blade barely scratches her unless she is out on the bank.
+    if (info.kind === 'impact') info.amount *= 2;
+    else if (this.state === 'choke') info.amount *= 1.3;
+    else if (this.state !== 'beached' && info.team === 'player' && !['wall', 'boom', 'reflect'].includes(info.kind)) info.amount *= 0.45;
+    info.amount = Math.round(info.amount);
+    const ok = super.takeDamage({ ...info, knock: 0, lift: 0, stun: 0 });
+    if (ok && !this.phase2 && this.hp < this.maxHp * 0.5) this.enragePending = true;
+    return ok;
+  }
+  sync(dt) {
+    super.sync(dt);
+    this.shadow.visible = this.y < -0.2;
+    this.shadow.position.y = (-0.1 - this.y);
+    this.shadow.material.opacity = this.submerged ? 0.45 : 0.25;
+  }
+  update(dt) {
+    const g = this.game, pl = g.nearestPlayer(this.x, this.z);
+    this.stateT += dt; this.cooldown -= dt; this.feedCd -= dt;
+    this.body = !this.submerged;
+    if (this.active && pl && !pl.dead) this.think(dt, pl);
+    this.springs(dt);
+  }
+  // Swim toward a point, staying in the pond. True when there, or when the bank is in the way.
+  swimTo(tx, tz, sp, dt) {
+    const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz);
+    if (d < 0.4) return true;
+    this.vx += (dx / d * sp - this.vx) * Math.min(1, dt * 3); this.vz += (dz / d * sp - this.vz) * Math.min(1, dt * 3);
+    const nx = this.x + this.vx * dt, nz = this.z + this.vz * dt;
+    if (!this.inPool(nx, nz)) { this.vx *= 0.3; this.vz *= 0.3; return true; }
+    this.x = nx; this.z = nz;
+    this.faceToward(this.x + this.vx, this.z + this.vz, dt, 5);
+    return false;
+  }
+  wander() {
+    const tiles = this.pool().filter(([x, z]) => this.inPool(x + 0.5, z + 0.5));
+    const [x, z] = tiles[Math.floor(Math.random() * tiles.length)] ?? [Math.floor(this.x), Math.floor(this.z)];
+    this.tx = x + 0.5; this.tz = z + 0.5;
+  }
+  sink(dt, to = KOI_DEEP) { this.y += (to - this.y) * Math.min(1, dt * 4); }
+  // A dunked bug in her pond: she goes for it.
+  feed(x, z) {
+    if (this.feedCd > 0 || !['swim', 'stalk'].includes(this.state)) return false;
+    this.set('seek'); this.tx = x; this.tz = z;
+    return true;
+  }
+  think(dt, pl) {
+    const g = this.game, fast = this.phase2 ? 1.3 : 1, heat = this.phase2 ? 2 : 1;
+    const toX = pl.x - this.x, toZ = pl.z - this.z, d = Math.hypot(toX, toZ) || 1;
+    switch (this.state) {
+      case 'intro':
+        this.action = 'spit'; this.actionP = Math.min(1, this.stateT / 1.9);
+        this.sink(dt, this.stateT < 1.4 ? -0.2 : KOI_DEEP);
+        this.faceToward(pl.x, pl.z, dt, 3);
+        if (this.stateT > 1.9) { this.set('swim'); this.wander(); }
+        break;
+      case 'enrage':
+        this.action = 'choke'; this.sink(dt, -0.1);
+        if (this.stateT > 1.3) { this.set('swim'); this.cooldown = 0.5; this.wander(); }
+        break;
+      case 'idle': case 'stalk': this.set('swim'); this.wander(); break;
+      case 'swim': {
+        this.action = 'swim'; this.sink(dt);
+        if (this.enragePending) { this.enragePending = false; this.phase2 = true; this.set('enrage'); g.onBossPhase(this); break; }
+        if (this.swimTo(this.tx, this.tz, 3.2 * fast, dt)) this.wander();
+        if (this.cooldown > 0) break;
+        const pick = (this.phase2 ? ['breach', 'spit', 'breach', 'summon', 'breach', 'spit'] : ['breach', 'spit', 'summon', 'breach', 'spit'])[this.pattern++ % (this.phase2 ? 6 : 5)];
+        if (pick === 'breach') {
+          // Come up at the edge nearest the knight, then go: over the bank and past them.
+          this.lockX = toX / d; this.lockZ = toZ / d;
+          this.breachLen = Math.min(13, d + 3.5);
+          this.set('aim');
+          g.telegraphLine(this.x, this.z, this.lockX, this.lockZ, this.breachLen, 2.4, 1.0 / fast, heat);
+          g.fx('sx', { n: 'breachrev', o: { pitch: fast } });
+        } else if (pick === 'spit') { this.set('spit'); this.spat = 0; g.fx('sx', { n: 'bubbles' }); }
+        else { this.set('summon'); g.fx('sx', { n: 'croak', o: { pitch: 0.6 } }); }
+        break;
+      }
+      case 'seek':
+        this.action = 'swim'; this.sink(dt, -0.7);
+        if (this.swimTo(this.tx, this.tz, 7, dt) || this.stateT > 2.2) {
+          this.set('gulp'); this.feedCd = this.phase2 ? 4 : 5;
+          g.koiGulp(this);
+        }
+        break;
+      case 'gulp':
+        this.action = 'choke'; this.actionP = this.stateT; this.sink(dt, -0.1);
+        if (this.stateT > 0.55) {
+          // She chokes and throws herself onto the nearest bank to cough it up.
+          const bank = g.bankNear(this.x, this.z);
+          if (bank) this.leap(bank.x, bank.z, 'choke');
+          else { this.set('swim'); this.wander(); }
+        }
+        break;
+      case 'aim':
+        this.action = 'spit'; this.actionP = 0.3; this.sink(dt, -0.3);
+        this.faceToward(this.x + this.lockX, this.z + this.lockZ, dt, 20);
+        if (this.stateT >= 1.0 / fast) this.leap(this.x + this.lockX * this.breachLen, this.z + this.lockZ * this.breachLen, 'breach');
+        break;
+      case 'leap': {
+        this.action = 'breach'; this.actionP = this.stateT / this.leapT;
+        const k = Math.min(1, this.stateT / this.leapT);
+        const nx = this.leapX0 + (this.leapX1 - this.leapX0) * k, nz = this.leapZ0 + (this.leapZ1 - this.leapZ0) * k;
+        // A hedge in the way ends the flight: she smacks into it and drops, dazed. Her room's
+        // gate counts as hedge (it is open until she is fought, and she stays in her room).
+        if (g.map.solidAt(nx, nz) || g.level.regionAt(Math.floor(nx), Math.floor(nz)) !== this.room) { this.land(true); break; }
+        this.x = nx; this.z = nz;
+        this.y = this.leapY0 * (1 - k) + Math.sin(k * Math.PI) * 2.6;
+        if (this.leapWhy === 'breach') g.koiTrample(this);
+        if (k >= 1) this.land(false);
+        break;
+      }
+      case 'beached': case 'choke':
+        this.action = this.state === 'choke' ? 'choke' : 'beached';
+        this.y = 0;
+        if (this.stateT > this.beachT) {
+          const home = g.pondNear(this, this.x, this.z);
+          if (home) this.leap(home.x, home.z, 'home');
+          else { this.set('swim'); this.wander(); }
+        }
+        break;
+      case 'spit': {
+        this.action = 'spit'; this.actionP = this.stateT / 1.4; this.sink(dt, KOI_SURFACE + 0.15);
+        this.faceToward(pl.x, pl.z, dt, 6);
+        const shots = this.phase2 ? 2 : 1;
+        if (this.spat < shots && this.stateT > 0.7 + this.spat * 0.45) { this.spat++; g.koiBubbles(this, pl, this.spat); }
+        if (this.stateT > 1.4 + shots * 0.2) { this.set('swim'); this.cooldown = 1.6 / fast; this.wander(); }
+        break;
+      }
+      case 'summon':
+        this.action = 'spit'; this.actionP = this.stateT / 1.0; this.sink(dt, KOI_SURFACE);
+        if (this.stateT > 0.6 && !this.summoned) { this.summoned = true; g.koiSummon(this, this.phase2 ? 4 : 3); }
+        if (this.stateT > 1.2) { this.summoned = false; this.set('swim'); this.cooldown = 1.8 / fast; this.wander(); }
+        break;
+    }
+  }
+  leap(x, z, why) {
+    this.leapX0 = this.x; this.leapZ0 = this.z; this.leapX1 = x; this.leapZ1 = z; this.leapY0 = this.y;
+    this.leapT = Math.max(0.5, Math.hypot(x - this.x, z - this.z) / (why === 'breach' ? 13 : 7));
+    this.leapWhy = why; this.trampled = new Set();
+    this.set('leap');
+    this.game.koiSplash(this, why === 'home' ? 0.8 : 1.4);
+  }
+  land(wall) {
+    const g = this.game;
+    this.y = 0;
+    // Off the hedge she hit, by a body-width, so she lies on the floor beside it.
+    if (wall) for (let i = 0; i < 6 && [[0, 0], [0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => g.map.solidAt(this.x + ox, this.z + oz)); i++) { this.x -= (this.lockX ?? 0) * 0.25; this.z -= (this.lockZ ?? 0) * 0.25; }
+    if (!wall && this.game.map.waterAt(this.x, this.z) && this.inPool(this.x, this.z, 0.3)) {
+      // Back in the pond.
+      g.koiSplash(this, 1.6);
+      this.y = -0.3; this.set('swim'); this.wander(); this.cooldown = (this.phase2 ? 1.1 : 1.6); return;
+    }
+    g.koiLand(this, wall);
+    this.beachT = (this.leapWhy === 'choke' ? 3.4 : 2.8) * (this.phase2 ? 0.8 : 1) + (wall ? 1 : 0);
+    this.set(this.leapWhy === 'choke' ? 'choke' : 'beached');
+  }
+}
+
+// ------------------------------------------------------------------ the hive
+// A beehive is a bug that never moves: it lets out a bee every few seconds while its room
+// is locked (three alive at most, ten in all) and the room is not won while it stands. A
+// thrown bug hits it for 2.5x and a puffball blast for 2x.
+export class Hive extends Creature {
+  constructor(game, x, z, room) {
+    super(game, x, z, M.beehive());
+    this.def = { name: 'Beehive', xp: 6, blood: [0xffb72e, 0xffd84d, 0xffe08a] };
+    this.type = 'hive'; this.team = 'enemy'; this.room = room; this.hittable = true;
+    this.radius = 0.75; this.mass = 1e4; this.armor = 1; this.launchSpeed = Infinity;
+    this.maxHp = this.hp = Math.round(80 * (game.difficulty ?? 1));
+    this.active = false; this.spawnT = 1.2; this.bees = []; this.left = 10;
+    this.facing = 0;
+  }
+  grabbable() { return false; }
+  takeDamage(info) {
+    if (info.kind === 'impact') info.amount *= 2.5;
+    else if (info.kind === 'boom') info.amount *= 2;
+    info.amount = Math.round(info.amount);
+    return super.takeDamage({ ...info, knock: 0, lift: 0, stun: 0 });
+  }
+  update(dt) {
+    this.springs(dt);
+    this.action = this.spawnT < 0.5 && this.left > 0 ? 'spawn' : null;
+    if (!this.active || this.dead) return;
+    this.bees = this.bees.filter(b => !b.dead);
+    if ((this.spawnT -= dt) <= 0) {
+      this.spawnT = 3.4;
+      if (this.bees.length < 3 && this.left > 0) { this.left--; this.game.hiveSpawn(this); }
+    }
+  }
+}
+// Puffballs: hit one (with anything) and it bursts, throwing everything near it outward as
+// a projectile and setting off its neighbours. A knight caught in it gets a light knock.
+// It grows back.
+export class Puffball extends Entity {
+  constructor(game, x, z) {
+    super(x, z);
+    this.game = game; this.prop = true; this.team = 'prop'; this.def = { name: 'Puffball' };
+    this.radius = 0.5; this.mass = 50; this.body = true; this.collides = false; this.hittable = true;
+    this.ready = true; this.regrow = 0; this.squash = 1; this.squashV = 0;
+    const m = M.puffball();
+    this.mesh = m.g; this.head = m.head; this.kit = m.kit;
+    this.mesh.position.set(x, 0, z);
+    bakeRig(this.mesh, this.kit);
+    game.scene.add(this.mesh);
+  }
+  takeDamage(info) { if (!this.ready) return false; this.game.puffBoom(this, info); return true; }
+  pop() { this.ready = false; this.hittable = false; this.body = false; this.regrow = 12; this.head.scale.setScalar(0.12); }
+  update(dt) {
+    this.squashV += (-(this.squash - 1) * 200 - this.squashV * 10) * dt;
+    this.squash += this.squashV * dt;
+    if (!this.ready) {
+      this.regrow -= dt;
+      this.head.scale.setScalar(Math.max(0.12, Math.min(1, 1.2 - this.regrow / 10)));
+      if (this.regrow <= 0) { this.ready = true; this.hittable = true; this.body = true; this.head.scale.setScalar(1); this.squashV -= 5; }
+    }
+    // A ready one breathes, so it reads as alive and touchy.
+    const b = this.ready ? 1 + Math.sin(this.age * 2.5 + this.x) * 0.04 : 1;
+    this.mesh.scale.set(1 / Math.sqrt(this.squash), this.squash * b, 1 / Math.sqrt(this.squash));
+  }
+  onRemove() { this.game.scene.remove(this.mesh); }
+}
+
+// ------------------------------------------------------------------ the Queen
+// She hovers out of easy reach and fights at range: fans of stings (parry them back at her),
+// a dive onto a ring at your feet, and a call to her hives. A dive that lands on a puffball
+// sets it off under her and leaves her grounded and dazed for a long time; a dive onto bare
+// floor only for a moment. Grounded she takes full damage; in the air a blade barely reaches.
+export class Queen extends Creature {
+  constructor(game, x, z, room) {
+    super(game, x, z, M.queen());
+    this.def = { name: 'The Queen', title: 'HER ROYAL BUZZNESS', sub: 'long may she sting', speed: 2.6, blood: [0xd4002e, 0xffc21f, 0xffe9a8], xp: 50 };
+    this.team = 'enemy'; this.room = room; this.boss = true; this.hittable = true; this.flying = true;
+    this.radius = 1.2; this.mass = 1e4; this.armor = 0.6; this.launchSpeed = 30;
+    this.maxHp = this.hp = Math.round(1800 * (game.difficulty ?? 1));
+    this.state = 'idle'; this.stateT = 0; this.cooldown = 1.5; this.active = false;
+    this.phase2 = false; this.pattern = 0; this.accel = 4;
+  }
+  grabbable() { return false; }
+  set(state) { this.state = state; this.stateT = 0; }
+  get controllable() { return true; }
+  takeDamage(info) {
+    // Her own stings come back at half: there are a lot of them, and the blender returns
+    // every one in reach.
+    if (info.kind === 'impact') info.amount *= 2;
+    else if (info.kind === 'reflect') info.amount *= 0.5;
+    else if (this.state === 'grounded') info.amount *= 1.25;
+    else if (info.team === 'player' && !['boom', 'wall'].includes(info.kind)) info.amount *= 0.4;
+    info.amount = Math.round(info.amount);
+    const ok = super.takeDamage({ ...info, knock: 0, lift: 0, stun: 0 });
+    if (ok && !this.phase2 && this.hp < this.maxHp * 0.5) this.enragePending = true;
+    return ok;
+  }
+  sync(dt) { this.rig.enraged = this.phase2; super.sync(this.phase2 ? dt * 1.3 : dt); }
+  update(dt) {
+    const g = this.game, pl = g.nearestPlayer(this.x, this.z);
+    this.stateT += dt; this.cooldown -= dt;
+    this.desiredX = this.desiredZ = 0;
+    if (this.active && pl && !pl.dead) this.think(dt, pl);
+    this.accel = this.state === 'dive' ? 40 : 4;
+    this.physics(dt);
+    this.springs(dt);
+  }
+  think(dt, pl) {
+    const g = this.game, d = Math.hypot(pl.x - this.x, pl.z - this.z) || 1, fast = this.phase2 ? 1.3 : 1, heat = this.phase2 ? 2 : 1;
+    const toX = (pl.x - this.x) / d, toZ = (pl.z - this.z) / d;
+    switch (this.state) {
+      case 'intro':
+        this.action = 'call'; this.faceToward(pl.x, pl.z, dt, 3);
+        if (this.stateT > 1.9) this.set('stalk');
+        break;
+      case 'enrage':
+        this.action = 'call';
+        if (this.stateT > 1.3) { this.set('stalk'); this.cooldown = 0.4; }
+        break;
+      case 'idle': case 'stalk': {
+        this.state = 'stalk'; this.action = null;
+        if (this.enragePending) { this.enragePending = false; this.phase2 = true; this.set('enrage'); g.onBossPhase(this); break; }
+        this.faceToward(pl.x, pl.z, dt, 4);
+        // Keep at stinging range, circling.
+        const m = d > 6.5 ? 1 : d < 4 ? -1 : 0, s = this.strafe ??= 1;
+        if (Math.random() < dt * 0.3) this.strafe = -s;
+        this.desiredX = (toX * m - toZ * s * 0.7) * 2.6 * fast; this.desiredZ = (toZ * m + toX * s * 0.7) * 2.6 * fast;
+        if (this.cooldown > 0) break;
+        const seq = this.phase2 ? ['volley', 'dive', 'dive', 'call', 'volley', 'dive'] : ['volley', 'dive', 'call', 'volley', 'dive'];
+        const pick = seq[this.pattern++ % seq.length];
+        if (pick === 'volley') { this.set('volley'); this.shots = 0; g.fx('sx', { n: 'stingvolley', o: { pitch: 0.8 } }); }
+        else if (pick === 'dive') {
+          this.set('rise'); this.tx = pl.x; this.tz = pl.z;
+          g.telegraphCircle(this.tx, this.tz, 2.1, 1.0 / fast + 0.25, heat);
+          g.fx('sx', { n: 'dive' });
+        } else { this.set('call'); g.fx('sx', { n: 'royal' }); }
+        break;
+      }
+      case 'volley': {
+        this.action = 'volley'; this.actionP = this.stateT / 1.6;
+        this.faceToward(pl.x, pl.z, dt, 6);
+        const times = [0.45, 0.8, 1.15];
+        if (this.shots < 3 && this.stateT > times[this.shots] / fast) { g.queenStings(this, pl, this.shots); this.shots++; }
+        if (this.stateT > 1.6 / fast) { this.set('stalk'); this.cooldown = 1.2 / fast; }
+        break;
+      }
+      case 'rise': {
+        // Up and over the ring; she comes down on its middle.
+        this.action = 'rise'; this.actionP = Math.min(1, this.stateT / (1.0 / fast));
+        const dx = this.tx - this.x, dz = this.tz - this.z, l = Math.hypot(dx, dz) || 1;
+        if (l > 0.3) { this.desiredX = dx / l * Math.min(7, l * 3); this.desiredZ = dz / l * Math.min(7, l * 3); }
+        if (this.stateT >= 1.0 / fast) this.set('dive');
+        break;
+      }
+      case 'dive': {
+        this.action = 'dive';
+        const dx = this.tx - this.x, dz = this.tz - this.z, l = Math.hypot(dx, dz);
+        if (l > 0.3) { this.desiredX = dx / l * 22; this.desiredZ = dz / l * 22; }
+        if (this.stateT > 0.25 || l < 0.4) { this.x = this.tx; this.z = this.tz; this.vx = this.vz = 0; const popped = g.queenSlam(this); this.groundT = popped ? 3.8 : 1.3; this.set('grounded'); }
+        break;
+      }
+      case 'grounded':
+        this.action = 'grounded';
+        if (this.stateT > this.groundT) { this.set('stalk'); this.cooldown = 0.8 / fast; }
+        break;
+      case 'call':
+        this.action = 'call';
+        if (this.stateT > 0.5 && !this.called) { this.called = true; g.queenCall(this, this.phase2 ? 3 : 2); }
+        if (this.stateT > 1.1) { this.called = false; this.set('stalk'); this.cooldown = 1.3 / fast; }
+        break;
+    }
+  }
+}
+
 // ------------------------------------------------------------------ small things
 export class Pollen extends Entity {
-  constructor(game, x, z, vx, vz, dmg, { heart = false } = {}) {
+  // kind: pollen (a butterfly's), heart (the Empress's), bubble (the koi's), sting (the queen's).
+  constructor(game, x, z, vx, vz, dmg, { heart = false, bubble = false, sting = false } = {}) {
     super(x, z);
-    this.game = game; this.vx = vx; this.vz = vz; this.dmg = dmg; this.y = heart ? 1.0 : 1.0;
-    this.radius = 0.22; this.team = 'enemy'; this.hittable = true; this.restitution = 0; this.heart = heart;
+    this.game = game; this.vx = vx; this.vz = vz; this.dmg = dmg; this.y = 1.0;
+    this.radius = bubble ? 0.3 : 0.22; this.team = 'enemy'; this.hittable = true; this.restitution = 0; this.heart = heart;
+    this.kind = heart ? 1 : bubble ? 2 : sting ? 3 : 0;
     const k = game.goreKit;
-    this.mesh = heart ? k.part('heart', 0xff5fa2, { s: 0.45, outline: 0.03 }) : k.part('sphere', 0xffe066, { s: 0.38, outline: 0.03, mat: { emissive: 0xffd23a, emissiveIntensity: 0.5 } });
+    this.mesh = heart ? k.part('heart', 0xff5fa2, { s: 0.45, outline: 0.03 })
+      : bubble ? k.part('sphere', 0xd6f3ff, { s: 0.55, outline: 0.03, mat: { transparent: true, opacity: 0.75, emissive: 0xa6dcff, emissiveIntensity: 0.35 } })
+      : sting ? k.part('cone', 0x3a2346, { s: [0.14, 0.5, 0.14], r: [Math.PI / 2, 0, 0], outline: 0.02, mat: { emissive: 0xffc21f, emissiveIntensity: 0.2 } })
+      : k.part('sphere', 0xffe066, { s: 0.38, outline: 0.03, mat: { emissive: 0xffd23a, emissiveIntensity: 0.5 } });
     game.scene.add(this.mesh);
     this.life = 5;
   }
@@ -762,7 +1217,8 @@ export class Pollen extends Entity {
       }
     }
     this.mesh.position.set(this.x, this.y + Math.sin(this.age * 12) * 0.08, this.z);
-    this.mesh.rotation.y += dt * 8;
+    // A sting points where it flies; the rest spin.
+    if (this.kind === 3) this.mesh.rotation.y = Math.atan2(this.vx, this.vz); else this.mesh.rotation.y += dt * 8;
   }
   pop() { this.dead = true; this.game.fx('pf', { x: Math.round(this.x * 100) / 100, y: 1, z: Math.round(this.z * 100) / 100, c: this.team === 'player' ? 0xff9ecb : 0xffe066 }); }
   onRemove() { this.game.scene.remove(this.mesh); }
@@ -772,6 +1228,7 @@ export class Gem extends Entity {
   constructor(game, x, z, value) {
     super(x, z);
     this.game = game; this.value = value; this.radius = 0.2; this.collides = true; this.restitution = 0.5;
+    this.waterSolid = true; // gems bounce off the pond's edge instead of drifting out of reach
     const col = value >= 5 ? 0xff5fa2 : M.RAINBOW[(Math.random() * 6) | 0];
     this.mesh = game.goreKit.part('lowSphere', col, { s: [0.22, 0.32, 0.22].map(v => v * (value >= 5 ? 1.5 : 1)), outline: 0.025, mat: { emissive: col, emissiveIntensity: 0.25 } });
     game.scene.add(this.mesh);

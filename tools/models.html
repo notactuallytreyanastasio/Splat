@@ -16,13 +16,14 @@ const lights = makeLights(view.scene);
 lights.follow(0, 0);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshToonMaterial({ color: 0xfff6fb }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; view.scene.add(floor);
-const models = [M.knight(), M.ladybug(), M.caterpillar(), M.butterfly(), M.beetle(), M.mantis()];
+// 6+ are the pond and the hive: frog, koi, bee, beehive, queen.
+const models = [M.knight(), M.ladybug(), M.caterpillar(), M.butterfly(), M.beetle(), M.mantis(), M.frog(), M.koi(), M.bee(), M.beehive(), M.queen()];
 models.forEach(m => bakeRig(m.root, m.kit));
 // ?only=0 shows one model alone at the center (0 is the knight), with ?yaw=radians.
 const only = q.has('only') ? +q.get('only') : null;
 models.forEach((m, i) => {
   if (only != null && i !== only) return;
-  if (only == null) m.root.position.set((i - 2.5) * 2.2 * 0.7, 0, -(i - 2.5) * 2.2 * 0.7);
+  if (only == null) m.root.position.set((i - 5) * 2.2 * 0.7, 0, -(i - 5) * 2.2 * 0.7);
   m.root.rotation.y = +(q.get('yaw') ?? 0);
   view.scene.add(m.root);
 });

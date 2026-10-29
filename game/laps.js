@@ -44,10 +44,19 @@ export function shader(spec) {
 }
 
 // ------------------------------------------------------------ the run between reloads
+// A run is three stages (game/levels/*.json, each naming its `next`): the garden, the pond,
+// the hive. The build is saved for the stage and lap it was written for.
 const KEY = 'pgm.run';
-export function loadRun(lap) {
-  if (lap <= 1) return null;
-  try { const r = JSON.parse(sessionStorage.getItem(KEY)); return r && r.lap === lap ? r : null; } catch { return null; }
+export const FIRST_STAGE = 'garden';
+export function loadRun(lap, stage = FIRST_STAGE) {
+  if (lap <= 1 && stage === FIRST_STAGE) return null;
+  try { const r = JSON.parse(sessionStorage.getItem(KEY)); return r && r.lap === lap && (r.stage ?? FIRST_STAGE) === stage ? r : null; } catch { return null; }
+}
+// Stages reached in this browser: the title offers them as a shortcut (not a record run).
+export function reachedStages() { try { return JSON.parse(localStorage.getItem('pgm.reached')) ?? []; } catch { return []; } }
+export function markReached(stage) {
+  const r = reachedStages();
+  if (stage !== FIRST_STAGE && !r.includes(stage)) try { localStorage.setItem('pgm.reached', JSON.stringify([...r, stage])); } catch {}
 }
 export function saveRun(run) { try { sessionStorage.setItem(KEY, JSON.stringify(run)); } catch {} }
 export function clearRun() { try { sessionStorage.removeItem(KEY); } catch {} }

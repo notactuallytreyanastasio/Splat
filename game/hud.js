@@ -3,6 +3,11 @@
 import { icon } from './icons.js';
 
 import { ICONS } from './tutorial.js';
+import { FIRST_STAGE, reachedStages } from './laps.js';
+
+// Stage names for the cards between stages and the title's shortcuts.
+const STAGES = { garden: 'the pastel garden', pond: 'the lily pond', hive: 'the honey hive' };
+const STAGE_NO = { garden: 1, pond: 2, hive: 3 };
 
 // Icons are drawn here, never emoji: ink outline, pastel fill, like everything else.
 const SPARK = `<svg class="spark" viewBox="-14 -14 28 28"><path d="M0-12C1.4-3 3-1.4 12 0C3 1.4 1.4 3 0 12C-1.4 3-3 1.4-12 0C-3-1.4-1.4-3 0-12Z" fill="#fff9c9" stroke="#3a2346" stroke-width="2.6" stroke-linejoin="round"/></svg>`;
@@ -173,7 +178,7 @@ export class Hud {
   title(onStart, net) {
     const t = this.$('.title');
     t.classList.add('on');
-    if (this.g.lap > 1) this.lapTitle(t, net);
+    if (this.g.lap > 1 || this.g.levelName !== FIRST_STAGE) this.lapTitle(t, net);
     if (net) {
       const link = `${location.origin}${location.pathname.replace(/index\.html$/, '')}?coop=${net.room}`;
       t.querySelector('.modes').innerHTML = `<p class="room">co-op room <b>${net.room}</b> · you are <b>${net.name}</b> · ${net.isHost ? 'you host' : 'joined'}</p><p class="share">send this: <button class="copy" type="button"><code>${link}</code><span>tap to copy</span></button></p>`;
@@ -188,13 +193,19 @@ export class Hud {
         setTimeout(() => { copy.querySelector('span').textContent = 'tap to copy'; }, 1800);
       };
       t.querySelector('button').textContent = net.isHost ? (this.g.lap > 1 ? `start lap ${this.g.lap}` : 'start the massacre') : 'jump in';
-    } else if (this.g.lap > 1) {
+    } else if (this.g.lap > 1 || this.g.levelName !== FIRST_STAGE) {
       t.querySelector('.fresh').onclick = e => { e.stopPropagation(); this.g.restart(true); };
     } else {
       // Co-op stays hidden until its server channel is live (?beta shows it).
       t.querySelector('.howto').onclick = e => { e.stopPropagation(); location.search = '?tutorial'; };
       t.querySelector('.coop').onclick = () => { const code = Math.random().toString(36).slice(2, 6).toUpperCase(); location.search = '?coop=' + code; };
       t.querySelector('.join').onsubmit = e => { e.preventDefault(); const c = e.target.code.value.trim().toUpperCase(); if (c) location.search = '?coop=' + encodeURIComponent(c); };
+      // Stages this browser has reached before: start there (a practice start, no records).
+      const reached = reachedStages().filter(s => STAGES[s]);
+      if (reached.length) {
+        t.querySelector('.modes').insertAdjacentHTML('beforeend', `<p class="jump">or jump to ${reached.map(s => `<button type="button" data-s="${s}">${STAGES[s]}</button>`).join(' ')}</p>`);
+        t.querySelectorAll('.jump button').forEach(b => b.onclick = e => { e.stopPropagation(); location.search = '?level=' + b.dataset.s; });
+      }
     }
     const go = () => { t.classList.remove('on'); removeEventListener('keydown', key); onStart(); document.documentElement.requestFullscreen?.().catch(() => {}); };
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(); };
@@ -204,14 +215,16 @@ export class Hud {
   // The title screen between laps: the reload needs a click for audio anyway, so it doubles
   // as the "you made it" card. It names the lap and its hour and lists what you carry.
   lapTitle(t, net) {
-    const g = this.g, p = g.player, th = g.theme, nb = p.boons?.length ?? 0;
+    const g = this.g, p = g.player, th = g.theme, nb = p.boons?.length ?? 0, staged = g.levelName !== FIRST_STAGE;
     t.classList.add('lap');
-    t.querySelector('h1').innerHTML = `<span class="lapno">${icon('lap')}LAP ${g.lap}</span><br>${th.name}`;
-    t.querySelector('h2').textContent = th.sub;
+    const tag = staged ? `STAGE ${STAGE_NO[g.levelName] ?? 2}${g.lap > 1 ? ` · LAP ${g.lap}` : ''}` : `LAP ${g.lap}`;
+    t.querySelector('h1').innerHTML = `<span class="lapno">${icon('lap')}${tag}</span><br>${staged ? g.stageInfo.title : th.name}`;
+    t.querySelector('h2').textContent = staged ? g.stageInfo.sub : th.sub;
+    const carry = `you carry <b>LV ${g.level_}</b>, <b>${nb}</b> boon${nb === 1 ? '' : 's'} and <b>${p.potions}</b> potion${p.potions === 1 ? '' : 's'}.`;
     t.querySelector('.tip').innerHTML = g.lapEarned
-      ? `you carry <b>LV ${g.level_}</b>, <b>${nb}</b> boon${nb === 1 ? '' : 's'} and <b>${p.potions}</b> potion${p.potions === 1 ? '' : 's'}. the bugs carry grudges: more of them, tougher, faster.`
-      : 'the bugs are tougher, faster and there are more of them.';
-    t.querySelector('button').textContent = `start lap ${g.lap}`;
+      ? `${carry} ${staged ? g.stageInfo.tip ?? '' : 'the bugs carry grudges: more of them, tougher, faster.'}`
+      : staged ? `a practice start: you get the levels a run would have by now, and no records. ${g.stageInfo.tip ?? ''}` : 'the bugs are tougher, faster and there are more of them.';
+    t.querySelector('button').textContent = staged ? (g.stageInfo.go ?? 'onward') : `start lap ${g.lap}`;
     if (!net) t.querySelector('.modes').innerHTML = '<button class="fresh" type="button">start a fresh run instead</button>';
   }
   // Lap banner at the start of a lap: the number big, the hour on a ribbon.
@@ -239,7 +252,12 @@ export class Hud {
     bar.insertAdjacentHTML('beforeend', '<i class="notch"></i>');
     label.innerHTML = `${MINI_CROWN}<span>${label.textContent}</span>${MINI_CROWN}`;
   }
-  bossBar(boss) { this.bossUi(); this.$('.boss').classList.toggle('p2', !!boss.phase2); }
+  bossBar(boss) {
+    this.bossUi();
+    this.$('.boss').classList.toggle('p2', !!boss.phase2);
+    const name = this.$('.boss label span'), want = (boss.def?.name ?? '').toUpperCase();
+    if (name && want && name.textContent !== want) name.textContent = want;
+  }
   bossCard(title, sub, dur = 2) {
     this.bossUi();
     const c = this.$('.bosscard');
@@ -293,7 +311,9 @@ export class Hud {
     if (g.guest && g.squad?.k != null) { t.kills = g.squad.k; t.maxChain = Math.max(t.maxChain, g.squad.ch ?? 0); }
     const { grade, score, parts } = gradeRun(t, won);
     // Bot, god-mode and skip-ahead runs are graded but never set records.
-    const { old, next, broke } = recordBests(t, won, grade, !g.bot && !g.god && g.opts.start == null && !g.opts.boons && g.lapEarned, g.lap);
+    // A stage clear is graded but only the whole run's last stage sets records.
+    const stage = !!g.stageDone, nextStage = g.stageInfo.next;
+    const { old, next, broke } = recordBests(t, won, grade, !stage && !g.bot && !g.god && g.opts.start == null && !g.opts.boons && g.lapEarned, g.lap);
     const mmss = s => s == null ? '--' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     const stamp = k => broke[k] ? '<i class="nb">NEW BEST</i>' : '';
     const metric = (ic, label, val, part, k, i) => `<div class="m" style="--d:${0.25 + i * 0.12}s"><span class="mi">${METRIC_ICONS[ic]}</span><span class="ml">${label}</span><b>${val}</b><em><u style="width:${Math.round(part * 100)}%"></u></em>${stamp(k)}</div>`;
@@ -302,9 +322,9 @@ export class Hud {
     const cards = [...counts].map(([id, n], i) => { const b = boonById(id); return b ? `<div class="bc" style="--d:${0.9 + i * 0.06}s" title="${b.desc}">${icon(b.icon)}<span>${b.name}</span>${n > 1 ? `<em>x${n}</em>` : ''}</div>` : ''; }).join('');
     const el = this.$('.end');
     el.innerHTML = `<div class="sheet">
-      ${g.lap > 1 || won ? `<div class="laptag">${icon('lap')}<b>LAP ${g.lap}</b><span>${won ? 'cleared' : g.theme.name.toLowerCase()}</span></div>` : ''}
-      <h1>${won ? 'EVERYTHING IS DEAD' : 'ADORABLY MURDERED'}</h1>
-      <h2>${won ? (g.lap > 1 ? `lap ${g.lap} of the garden, spotless. lap ${g.lap + 1} is meaner.` : 'the garden is spotless. well, no.') : `popped in ${g.level.rooms[g.currentRoom]?.name ?? 'the garden'}${g.lap > 1 ? ` on lap ${g.lap}` : ''}`}</h2>
+      ${g.lap > 1 || won ? `<div class="laptag">${icon('lap')}<b>${stage ? `STAGE ${STAGE_NO[g.levelName] ?? 1}` : `LAP ${g.lap}`}</b><span>${won ? 'cleared' : g.theme.name.toLowerCase()}</span></div>` : ''}
+      <h1>${stage ? 'STAGE CLEAR' : won ? 'EVERYTHING IS DEAD' : 'ADORABLY MURDERED'}</h1>
+      <h2>${stage ? `${g.stageInfo.cleared ?? 'quiet now'}. next: ${STAGES[nextStage] ?? nextStage}.` : won ? (g.lap > 1 ? `lap ${g.lap}, spotless. lap ${g.lap + 1} is meaner.` : 'the garden, the pond and the hive are spotless. well, no.') : `popped in ${g.level.rooms[g.currentRoom]?.name ?? STAGES[g.levelName] ?? 'the garden'}${g.lap > 1 ? ` on lap ${g.lap}` : ''}`}</h2>
       <div class="top">
         <div class="grade g${grade}">${ROSETTE}<b>${grade}</b><small>${score} pts</small>${stamp('grade')}</div>
         <div class="metrics">
@@ -317,7 +337,7 @@ export class Hud {
       <div class="bests"><span class="bl">personal bests</span><span>time <b>${mmss(next.time)}</b></span><span>grade <b>${next.grade ?? '--'}</b></span><span>chain <b>x${next.chain ?? 0}</b></span><span>deepest lap <b>${next.lap ?? 1}</b>${broke.lap ? ' <i class="nb inl">NEW BEST</i>' : ''}</span>${old.grade == null ? '<span class="first">first run on record</span>' : ''}</div>
       <div class="extras"><span><b>${t.gibs}</b> pieces</span><span><b>${t.droplets}</b> drops of blood</span><span><b>${t.wallSlams}</b> wall splats</span><span><b>${t.bestStreak}</b> best streak</span><span><b>LV ${g.level_}</b></span>${g.lap > 1 && g.runTotals ? `<span><b>${g.runTotals.kills + t.kills}</b> bugs this run</span>` : ''}</div>
       ${cards ? `<div class="build"><span class="bl">your build</span><div class="cards">${cards}</div></div>` : '<div class="build"><span class="bl">no boons taken. brave.</span></div>'}
-      <p>${g.guest ? 'waiting for the host…' : `<button class="again" type="button">${won ? `another lap: lap ${g.lap + 1}` : 'new run'}</button><small class="hint">or press ENTER</small>`}</p>
+      <p>${g.guest ? 'waiting for the host…' : `<button class="again" type="button">${stage ? `onward: ${STAGES[nextStage] ?? nextStage}` : won ? `another lap: lap ${g.lap + 1}` : 'new run'}</button>${!won && !g.guest && g.levelName !== FIRST_STAGE ? `<button class="retry" type="button">try ${STAGES[g.levelName]} again (practice)</button>` : ''}<small class="hint">or press ENTER</small>`}</p>
     </div>`;
     el.classList.toggle('won', won);
     el.classList.add('on');
@@ -327,6 +347,8 @@ export class Hud {
     if (Object.values(broke).some(Boolean)) g.sfx.play('levelup');
     const again = el.querySelector('.again');
     if (again) again.onclick = () => { this.g.againTapped = true; };
+    const retry = el.querySelector('.retry');
+    if (retry) retry.onclick = () => { location.search = '?level=' + g.levelName; };
   }
 }
 

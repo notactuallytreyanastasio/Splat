@@ -484,6 +484,232 @@ export function mantis() {
 // ------------------------------------------------------------------ gore pieces (shared kit)
 const gore = new ToonKit();
 gore.shared = true; // chunks and blobs all share these materials
+// ------------------------------------------------------------------ Pond Frog (hops, tongue)
+export function frog() {
+  const r = base(), k = r.kit, b = r.body, skin = 0x8fe08a, dark = 0x5cbf6a, belly = 0xfff3c8;
+  const torso = joint(b, 0, 0.34, 0);
+  k.part('sphere', skin, { s: [0.86, 0.56, 0.92], parent: torso });
+  k.part('sphere', belly, { s: [0.62, 0.34, 0.6], p: [0, -0.12, 0.14], parent: torso, outline: false });
+  for (const [x, z, sz] of [[0.18, -0.15, 0.16], [-0.2, 0.02, 0.13], [0.05, -0.32, 0.11], [-0.08, 0.2, 0.1]]) k.part('sphere', dark, { s: [sz, 0.05, sz], p: [x, 0.25, z], parent: torso, outline: false, shadow: false });
+  const head = joint(torso, 0, 0.12, 0.3);
+  const eyes = [];
+  for (const side of [1, -1]) {
+    const eb = joint(head, side * 0.2, 0.17, 0);
+    k.part('sphere', skin, { s: 0.27, parent: eb });
+    eye(k, eb, 0, 0.05, 0.07, 0.2, { pupil: PAL.black });
+    k.part('sphere', 0xffb3d1, { s: [0.13, 0.07, 0.06], p: [side * 0.29, -0.03, 0.2], parent: head, outline: false, shadow: false });
+    eyes.push(eb);
+  }
+  const jaw = joint(head, 0, -0.08, 0.16);
+  k.part('sphere', 0xff7eb6, { s: [0.48, 0.05, 0.18], p: [0, 0, 0.06], parent: jaw, outline: 0.012 });
+  const throat = joint(torso, 0, -0.12, 0.36);
+  k.part('sphere', belly, { s: [0.32, 0.22, 0.22], parent: throat, outline: 0.015 });
+  // The tongue runs along +z from the mouth, 1 unit long at scale 1: the pose stretches it.
+  const tongue = joint(head, 0, -0.06, 0.2);
+  k.part('cylinder', PAL.hotpink, { s: [0.11, 1, 0.11], p: [0, 0, 0.5], r: [Math.PI / 2, 0, 0], parent: tongue, outline: 0.012 });
+  const tip = k.part('sphere', 0xff2d6f, { s: [0.22, 0.18, 0.08], p: [0, 0, 1], parent: tongue, outline: 0.012 });
+  tongue.visible = false;
+  const legs = [];
+  for (const side of [1, -1]) {
+    const hip = joint(torso, side * 0.36, -0.12, -0.22);
+    k.part('sphere', skin, { s: [0.3, 0.28, 0.46], parent: hip });
+    const foot = joint(hip, side * 0.06, -0.12, 0.18);
+    k.part('sphere', dark, { s: [0.22, 0.06, 0.32], p: [0, 0, 0.06], parent: foot });
+    const arm = joint(torso, side * 0.24, -0.14, 0.3);
+    limb(k, arm, skin, 0.06, 0.2);
+    k.part('sphere', dark, { s: [0.14, 0.05, 0.16], p: [0, -0.2, 0.04], parent: arm, outline: false });
+    legs.push(hip, arm);
+  }
+  Object.assign(r.parts, { torso, head, jaw, throat, tongue, tip, legs, eyes });
+  r.gibs = [head, ...legs, torso];
+  r.height = 0.85;
+  r.tongueLen = 5.2;
+  r.pose = (r, s) => {
+    const p = s.p ?? 0;
+    r.body.scale.set(1, 1, 1); r.body.position.y = 0; r.body.rotation.x = 0;
+    throat.scale.setScalar(1 + 0.3 * Math.max(0, Math.sin(s.t * 5 + s.seed)));
+    jaw.rotation.x = 0; head.rotation.x = 0; tongue.visible = false;
+    for (let i = 0; i < legs.length; i++) legs[i].rotation.set(0, 0, 0);
+    if (s.action === 'crouch') {
+      const c = easeOut(p * 1.5);
+      r.body.scale.set(1 + 0.15 * c, 1 - 0.32 * c, 1 + 0.1 * c); r.body.position.y = -0.05 * c;
+    } else if (s.action === 'hop' || (s.air && s.action !== 'tongue')) {
+      // Kick out the back legs on the way up, gather them for the landing.
+      const up = s.action === 'hop' ? Math.max(0, 1 - p * 1.6) : 0.5;
+      r.body.rotation.x = -0.35 * up + 0.25 * (1 - up);
+      legs[0].rotation.x = legs[2].rotation.x = 1.3 * up;
+      legs[1].rotation.x = legs[3].rotation.x = -1.2;
+      r.body.scale.set(1 - 0.1 * up, 1 + 0.15 * up, 1 + 0.12 * up);
+    } else if (s.action === 'windup') {
+      head.rotation.x = -0.25 * p; throat.scale.setScalar(1 + 0.6 * p);
+      jaw.rotation.x = 0.2 * p;
+    } else if (s.action === 'tongue') {
+      const ext = p < 0.3 ? p / 0.3 : Math.max(0, 1 - (p - 0.3) / 0.7);
+      tongue.visible = ext > 0.02; tongue.scale.set(1, 1, Math.max(0.01, ext * r.tongueLen));
+      tip.scale.set(0.22, 0.18, 0.08 / Math.max(0.05, ext * r.tongueLen));
+      jaw.rotation.x = 0.5;
+    }
+  };
+  return r;
+}
+
+// ------------------------------------------------------------------ Old Gold, the pond koi (boss)
+export function koi() {
+  const r = base(), k = r.kit, b = r.body, white = PAL.white, orange = 0xff8a3d, red = 0xff4d4d, fin = 0xffc49a;
+  const body = joint(b, 0, 0.75, 0);
+  const head = joint(body, 0, 0, 0.95);
+  k.part('sphere', white, { s: [1.2, 1.0, 1.35], parent: head });
+  k.part('sphere', orange, { s: [0.8, 0.45, 0.75], p: [0.12, 0.33, 0.05], r: [0, 0, -0.2], parent: head, outline: false });
+  eye(k, head, 0.46, 0.14, 0.34, 0.24, { pupil: PAL.black });
+  eye(k, head, -0.46, 0.14, 0.34, 0.24, { pupil: PAL.black });
+  const jaw = joint(head, 0, -0.16, 0.6);
+  k.part('torus', 0xff9ecb, { s: [0.3, 0.26, 0.3], parent: jaw, outline: 0.02 });
+  k.part('sphere', 0x7a2f4a, { s: [0.32, 0.26, 0.1], p: [0, 0, 0.02], parent: jaw, outline: false });
+  for (const side of [1, -1]) {
+    k.part('cylinder', fin, { s: [0.035, 0.55, 0.035], p: [side * 0.28, -0.32, 0.62], r: [1.0, 0, side * 0.5], parent: head, outline: 0.012 });
+    const pec = joint(head, side * 0.55, -0.35, -0.1);
+    k.part('sphere', fin, { s: [0.08, 0.5, 0.42], p: [side * 0.12, -0.12, -0.12], r: [0.4, 0, side * 0.7], parent: pec, outline: 0.015, mat: DOUBLE });
+  }
+  const crown = joint(head, 0, 0.5, 0.05);
+  k.part('cylinder', PAL.gold, { s: [0.44, 0.1, 0.36], parent: crown });
+  for (let i = 0; i < 5; i++) k.part('cone', PAL.gold, { s: [0.08, 0.22, 0.08], p: [(i - 2) * 0.09, 0.14, 0.12], parent: crown, outline: 0.015 });
+  k.part('sphere', 0xa6dcff, { s: 0.12, p: [0, 0.16, 0.2], parent: crown, outline: 0.012, mat: { emissive: 0xa6dcff, emissiveIntensity: 0.4 } });
+  const mid = joint(head, 0, 0, -0.85);
+  k.part('sphere', orange, { s: [1.25, 1.05, 1.55], parent: mid });
+  k.part('sphere', white, { s: [0.7, 0.5, 0.7], p: [-0.25, 0.3, -0.2], r: [0, 0, 0.3], parent: mid, outline: false });
+  k.part('sphere', red, { s: [0.45, 0.3, 0.4], p: [0.3, 0.38, 0.35], parent: mid, outline: false });
+  k.part('sphere', fin, { s: [0.08, 0.6, 1.0], p: [0, 0.6, -0.1], r: [-0.3, 0, 0], parent: mid, outline: 0.015, mat: DOUBLE });
+  const rear = joint(mid, 0, 0, -0.9);
+  k.part('sphere', white, { s: [0.85, 0.78, 1.15], parent: rear });
+  k.part('sphere', orange, { s: [0.5, 0.35, 0.5], p: [0.1, 0.3, -0.1], parent: rear, outline: false });
+  const tail = joint(rear, 0, 0, -0.6);
+  for (const side of [1, -1]) k.part('sphere', fin, { s: [0.08, 0.75, 0.8], p: [0, side * 0.32, -0.38], r: [side * 0.65, 0, 0], parent: tail, outline: 0.018, mat: DOUBLE });
+  Object.assign(r.parts, { body, head, jaw, crown, mid, rear, tail });
+  r.gibs = [head, crown, mid, rear, tail];
+  r.height = 1.7;
+  r.pose = (r, s) => {
+    const p = s.p ?? 0, a = s.action;
+    const rate = a === 'beached' ? 11 : a === 'swim' ? 5 : 3, amp = a === 'beached' ? 1.4 : a === 'swim' ? 1 : 0.6;
+    mid.rotation.y = Math.sin(s.t * rate) * 0.18 * amp;
+    rear.rotation.y = Math.sin(s.t * rate - 1) * 0.3 * amp;
+    tail.rotation.y = Math.sin(s.t * rate - 2) * 0.45 * amp;
+    body.rotation.set(0, 0, 0); body.position.y = 0.75;
+    jaw.scale.setScalar(1 + 0.15 * Math.sin(s.t * 3));
+    if (a === 'breach') { body.rotation.x = -0.6 + p * 1.3; jaw.scale.setScalar(1.6); }
+    else if (a === 'beached') { body.rotation.z = 1.2 + Math.sin(s.t * 11) * 0.15; body.position.y = 0.55 + Math.abs(Math.sin(s.t * 5.5)) * 0.25; jaw.scale.setScalar(1.2 + 0.3 * Math.sin(s.t * 9)); }
+    else if (a === 'spit') { body.rotation.x = -0.5 * Math.sin(Math.min(1, p) * Math.PI); jaw.scale.setScalar(1 + 0.8 * p); }
+    else if (a === 'choke') { body.rotation.z = Math.sin(s.t * 20) * 0.25; jaw.scale.setScalar(1.7); body.rotation.x = -0.3; }
+  };
+  return r;
+}
+
+// ------------------------------------------------------------------ Bee (swarms from hives)
+export function bee(scale = 1) {
+  const r = base(), k = r.kit, b = r.body, gold = 0xffd84d, ink = 0x3a2346;
+  const torso = joint(b, 0, 0.95, 0);
+  k.part('sphere', gold, { s: [0.36, 0.34, 0.46], p: [0, 0, -0.08], parent: torso });
+  for (const z of [-0.02, -0.18]) k.part('sphere', ink, { s: [0.37, 0.3, 0.07], p: [0, 0.01, z], parent: torso, outline: false });
+  k.part('cone', ink, { s: [0.06, 0.16, 0.06], p: [0, -0.02, -0.34], r: [-Math.PI / 2, 0, 0], parent: torso, outline: 0.01 });
+  const head = joint(torso, 0, 0.04, 0.2);
+  k.part('sphere', ink, { s: 0.24, parent: head });
+  eye(k, head, 0.07, 0.03, 0.07, 0.11, { pupil: 0xff2d6f });
+  eye(k, head, -0.07, 0.03, 0.07, 0.11, { pupil: 0xff2d6f });
+  antenna(k, head, 0.04, ink, PAL.hotpink, 0.16, 0.5).position.y = 0.08;
+  antenna(k, head, -0.04, ink, PAL.hotpink, 0.16, 0.5).position.y = 0.08;
+  const wingL = joint(torso, 0.08, 0.16, -0.02), wingR = joint(torso, -0.08, 0.16, -0.02);
+  for (const [w, side] of [[wingL, 1], [wingR, -1]]) k.part('sphere', 0xeaf8ff, { s: [0.36, 0.02, 0.2], p: [side * 0.18, 0, 0], parent: w, outline: 0.01, mat: { transparent: true, opacity: 0.7, side: THREE.DoubleSide } });
+  Object.assign(r.parts, { torso, head, wingL, wingR });
+  r.gibs = [head, wingL, wingR, torso];
+  r.height = 1.2;
+  r.hover = 0.95;
+  r.root.scale.setScalar(scale);
+  r.pose = (r, s) => {
+    const flap = Math.sin(s.t * 70) * 0.6;
+    wingL.rotation.z = flap + 0.3; wingR.rotation.z = -flap - 0.3;
+    torso.position.y = s.air ? 0.45 : 0.95 + Math.sin(s.t * 6 + s.seed) * 0.1;
+    // Stinger forward for the dive.
+    torso.rotation.x = s.action === 'windup' ? -0.9 * Math.min(1, s.p * 1.5) : s.action === 'attack' ? 0.5 : s.walk * 0.2;
+  };
+  return r;
+}
+
+// ------------------------------------------------------------------ props for the hive
+export function beehive() {
+  const r = base(), k = r.kit, b = r.body;
+  const tiers = [[1.1, 0.35], [1.25, 0.95], [1.1, 1.5], [0.8, 1.95], [0.42, 2.25]];
+  const parts = tiers.map(([w, y], i) => { const t = joint(b, 0, y, 0); k.part('sphere', i % 2 ? 0xffc94d : 0xffb72e, { s: [w, 0.62, w], parent: t }); return t; });
+  k.part('sphere', 0x5a3a2a, { s: [0.36, 0.26, 0.12], p: [0, 0, 0.6], parent: parts[1], outline: 0.02 });
+  for (let i = 0; i < 4; i++) k.part('sphere', 0xffe08a, { s: [0.16, 0.24, 0.1], p: [Math.sin(i * 1.7) * 0.55, 0, Math.cos(i * 1.7) * 0.55], parent: parts[i], outline: false, mat: { transparent: true, opacity: 0.85 } });
+  r.gibs = parts.slice().reverse();
+  r.height = 2.6;
+  r.pose = (r, s) => {
+    // It hums: a slow breath, and a shudder when a bee is about to come out.
+    const hum = 1 + Math.sin(s.t * 3 + s.seed) * 0.02 + (s.action === 'spawn' ? Math.sin(s.t * 40) * 0.05 : 0);
+    r.body.scale.set(1 / Math.sqrt(hum), hum, 1 / Math.sqrt(hum));
+  };
+  return r;
+}
+export function puffball() {
+  const g = new THREE.Group(), k = new ToonKit();
+  k.part('cylinder', PAL.cream, { s: [0.3, 0.32, 0.3], p: [0, 0.16, 0], parent: g });
+  const head = new THREE.Group(); head.position.y = 0.6; g.add(head);
+  // A fat lilac cap, a frill of white where it meets the stalk, darker spore spots.
+  k.part('sphere', 0xe4ccff, { s: [1.0, 0.78, 1.0], parent: head });
+  k.part('torus', PAL.white, { s: [0.62, 0.62, 0.5], p: [0, -0.24, 0], r: [Math.PI / 2, 0, 0], parent: head, outline: 0.015 });
+  for (let i = 0; i < 8; i++) { const a = i * 2.4, y = 0.05 + (i % 3) * 0.1, rr = 0.42 - (i % 3) * 0.08; k.part('sphere', 0xa77fe0, { s: [0.15, 0.08, 0.15], p: [Math.cos(a) * rr, y + 0.12, Math.sin(a) * rr], r: [Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6], parent: head, outline: false, shadow: false }); }
+  k.part('sphere', 0xfff6ff, { s: [0.3, 0.12, 0.3], p: [0, 0.37, 0], parent: head, outline: false, shadow: false });
+  return { g, kit: k, head };
+}
+
+// ------------------------------------------------------------------ the Queen Bee (boss)
+export function queen() {
+  const r = base(), k = r.kit, b = r.body, gold = 0xffc21f, ink = 0x3a2346;
+  const torso = joint(b, 0, 2.1, 0);
+  const abdomen = joint(torso, 0, -0.1, -0.55);
+  k.part('sphere', gold, { s: [1.2, 1.1, 1.75], p: [0, 0, -0.35], r: [0.25, 0, 0], parent: abdomen });
+  for (let i = 0; i < 3; i++) k.part('sphere', ink, { s: [1.18 - i * 0.2, 1.0 - i * 0.18, 0.2], p: [0, 0.02 - i * 0.12, -0.1 - i * 0.42], r: [0.25, 0, 0], parent: abdomen, outline: false });
+  const sting = joint(abdomen, 0, -0.35, -1.15);
+  k.part('cone', ink, { s: [0.16, 0.5, 0.16], r: [-Math.PI / 2 - 0.3, 0, 0], parent: sting, outline: 0.015 });
+  k.part('sphere', 0xffe9a8, { s: [0.95, 0.5, 0.8], p: [0, 0.12, 0.15], parent: torso });
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; k.part('sphere', PAL.white, { s: [0.26, 0.12, 0.26], p: [Math.cos(a) * 0.45, 0.3, 0.15 + Math.sin(a) * 0.38], parent: torso, outline: 0.012 }); }
+  const head = joint(torso, 0, 0.35, 0.65);
+  k.part('sphere', ink, { s: [0.7, 0.62, 0.62], parent: head });
+  eye(k, head, 0.2, 0.06, 0.2, 0.26, { pupil: 0xff2d6f });
+  eye(k, head, -0.2, 0.06, 0.2, 0.26, { pupil: 0xff2d6f });
+  k.part('sphere', PAL.hotpink, { s: [0.2, 0.1, 0.1], p: [0, -0.18, 0.28], parent: head, outline: 0.012 });
+  antenna(k, head, 0.12, ink, PAL.gold, 0.45, 0.6).position.y = 0.25;
+  antenna(k, head, -0.12, ink, PAL.gold, 0.45, 0.6).position.y = 0.25;
+  const crown = joint(head, 0, 0.36, 0);
+  k.part('cylinder', PAL.gold, { s: [0.5, 0.12, 0.44], parent: crown });
+  for (let i = 0; i < 5; i++) k.part('cone', PAL.gold, { s: [0.1, 0.28, 0.1], p: [Math.cos(i * 1.256) * 0.2, 0.18, Math.sin(i * 1.256) * 0.18], parent: crown, outline: 0.015 });
+  k.part('heart', PAL.hotpink, { s: 0.14, p: [0, 0.2, 0.22], parent: crown, outline: 0.012 });
+  const wingL = joint(torso, 0.3, 0.45, -0.1), wingR = joint(torso, -0.3, 0.45, -0.1);
+  for (const [w, side] of [[wingL, 1], [wingR, -1]]) {
+    k.part('sphere', 0xeaf8ff, { s: [1.5, 0.03, 0.7], p: [side * 0.75, 0, 0.05], r: [0, side * 0.2, 0], parent: w, outline: 0.015, mat: { transparent: true, opacity: 0.65, side: THREE.DoubleSide } });
+    k.part('sphere', 0xffeef8, { s: [1.0, 0.03, 0.5], p: [side * 0.55, -0.03, -0.45], r: [0, -side * 0.35, 0], parent: w, outline: 0.015, mat: { transparent: true, opacity: 0.6, side: THREE.DoubleSide } });
+  }
+  const legs = [];
+  for (const z of [0.3, 0, -0.3]) for (const side of [1, -1]) { const l = joint(torso, side * 0.3, -0.2, z); limb(k, l, ink, 0.06, 0.55, {}); l.rotation.z = side * 0.4; legs.push(l); }
+  Object.assign(r.parts, { torso, abdomen, head, crown, wingL, wingR, sting, legs });
+  r.gibs = [head, crown, wingL, wingR, ...legs, abdomen, torso];
+  r.height = 3.2;
+  r.hover = 2.1;
+  r.pose = (r, s) => {
+    const p = s.p ?? 0, a = s.action;
+    const flap = Math.sin(s.t * (a === 'grounded' ? 8 : 45)) * (a === 'grounded' ? 0.2 : 0.55);
+    wingL.rotation.z = flap + 0.2; wingR.rotation.z = -flap - 0.2;
+    torso.position.y = 2.1 + Math.sin(s.t * 2.5) * 0.18;
+    torso.rotation.set(0, 0, 0); abdomen.rotation.x = 0;
+    if (a === 'volley') { abdomen.rotation.x = -0.7 * Math.sin(Math.min(1, p) * Math.PI); torso.rotation.x = 0.2; }
+    else if (a === 'rise') { torso.position.y = 2.1 + p * 1.2; abdomen.rotation.x = -0.4; }
+    else if (a === 'dive') { torso.position.y = 0.9; torso.rotation.x = 0.7; }
+    else if (a === 'grounded') { torso.position.y = 0.75; torso.rotation.z = Math.sin(s.t * 4) * 0.12; abdomen.rotation.x = 0.3; }
+    else if (a === 'call') { torso.rotation.x = -0.3; abdomen.rotation.x = -0.2 + Math.sin(s.t * 20) * 0.1; }
+    for (let i = 0; i < legs.length; i++) legs[i].rotation.x = Math.sin(s.t * 3 + i) * 0.2;
+  };
+  return r;
+}
+
 export function goreChunk(kind) {
   const g = new THREE.Group();
   if (kind === 'meat') {

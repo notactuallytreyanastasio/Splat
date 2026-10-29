@@ -91,7 +91,8 @@ export class World {
     let hit = null;
     for (let tz = Math.floor(e.z - r); tz <= Math.floor(e.z + r); tz++) {
       for (let tx = Math.floor(e.x - r); tx <= Math.floor(e.x + r); tx++) {
-        if (!map.isSolid(tx, tz)) continue;
+        // e.waterSolid: a walker (and every knight) bumps into water like a wall.
+        if (!map.isSolid(tx, tz) && !(e.waterSolid && map.isWater(tx, tz))) continue;
         const cx = Math.max(tx, Math.min(e.x, tx + 1)), cz = Math.max(tz, Math.min(e.z, tz + 1));
         let dx = e.x - cx, dz = e.z - cz, d = Math.hypot(dx, dz);
         if (d >= r) continue;

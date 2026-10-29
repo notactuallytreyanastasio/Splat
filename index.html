@@ -233,6 +233,8 @@
   .end .bc em { position: absolute; top: -9px; right: -9px; font-style: normal; font-size: 11px; background: var(--pink); color: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 0 4px; }
   .end p { margin: clamp(12px, 2.4vmin, 20px) 0 0; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
   .end .hint { opacity: .6; font-size: 15px; }
+  .end .retry, .title .modes .jump button { font: 700 15px Fredoka, system-ui; padding: 6px 12px; border: 3px solid var(--ink); border-radius: 12px; background: var(--mint, #9ff0d4); color: var(--ink); box-shadow: 0 3px 0 var(--ink); cursor: pointer; }
+  .title .modes .jump { font-size: 15px; }
   body.touching .end .hint { display: none; }
   @media (max-width: 560px) { .end .top { flex-direction: column; } .end .metrics { width: 100%; } }
   /* Short landscape phones: tighter, and the button sticks to the bottom so it is always one tap away. */

@@ -35,7 +35,7 @@ export class Bot {
     const moveTo = (x, z, stop = 0.3) => {
       const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz);
       if (d < stop) return true;
-      if (g.map.los(p.x, p.z, x, z)) { it.moveX = dx / d; it.moveZ = dz / d; return false; }
+      if (g.map.walkLos(p.x, p.z, x, z)) { it.moveX = dx / d; it.moveZ = dz / d; return false; }
       return this.follow(x, z, it, dt);
     };
 
@@ -50,11 +50,13 @@ export class Bot {
     }
     if (p.hp < p.stats.maxHp * 0.4 && p.potions > 0) it.potion = true;
 
+    // A koi under the water is not a target, but she is fed by whatever lands in her pond.
+    const koi = g.boss?.swims && !g.boss.dead ? g.boss : null;
     // 2. Holding something: throw it at the juiciest target.
     if (p.holding) {
       this.holdT += dt;
       const targets = foes.filter(e => e !== p.holding);
-      const t = targets.find(e => e.boss) ?? targets.sort((a, b) => dist(a) - dist(b))[0];
+      const t = targets.find(e => e.boss) ?? (koi && !koi.hittable ? koi : null) ?? targets.sort((a, b) => dist(a) - dist(b))[0];
       if (t) aimAt(t.x, t.z);
       if (this.holdT > 0.35) { it.attack = true; this.holdT = 0; }
       return it;
@@ -71,7 +73,7 @@ export class Bot {
       if (now - this.targetT > 6 && !target.boss) { this.ignore.set(target, now + 15); this.target = null; }
       // Throw a small bug at the boss or a crowd if one is right here.
       const grabbable = foes.find(e => (e.grabbable?.() || (p.stats.grabAny && e.def?.grab === 'stunned')) && dist(e) < 1.5 * p.stats.grabRange) ?? (boss ? foes.find(e => e.baby && e.grabbable() && dist(e) < 4) : null);
-      const throwTarget = boss ?? (foes.length >= 3 ? target : null);
+      const throwTarget = boss ?? koi ?? (foes.length >= 3 ? target : null);
       this.grabCd = (this.grabCd ?? 0) - dt;
       if (grabbable && throwTarget && grabbable !== throwTarget && this.grabCd <= 0) { aimAt(grabbable.x, grabbable.z); it.grab = true; this.grabCd = boss ? 0.5 : 2.5; this.grabbing = 0.35; return it; }
       // Hold off swinging while a grab is buffered.
@@ -103,8 +105,14 @@ export class Bot {
       return it;
     }
 
+    // Her pond, with nothing else to fight: wait on the bank nearest her.
+    if (koi && koi.active) {
+      const bank = g.bankNear(koi.x, koi.z, koi.room);
+      if (bank) { moveTo(bank.x, bank.z, 1.2); aimAt(koi.x, koi.z); }
+      return it;
+    }
     // 4. Loot: cocoons and jars in reach, then gems and potions.
-    const loot = ents.filter(e => !e.dead && ((e instanceof Breakable && dist(e) < 9) || ((e instanceof Gem || (e instanceof Potion && p.potions < 5)) && dist(e) < 7)))
+    const loot = ents.filter(e => !e.dead && !g.map.waterAt(e.x, e.z) && ((e instanceof Breakable && dist(e) < 9) || ((e instanceof Gem || (e instanceof Potion && p.potions < 5)) && dist(e) < 7)))
       .sort((a, b) => dist(a) - dist(b))[0];
     if (loot && g.map.los(p.x, p.z, loot.x, loot.z)) {
       if (loot instanceof Breakable) {
@@ -133,6 +141,17 @@ export class Bot {
     }
     for (const e of foes) {
       const d = Math.hypot(e.x - p.x, e.z - p.z);
+      if (e.swims) {
+        // Old Gold: step out of the lane she is about to come down.
+        if ((e.state === 'aim' && e.stateT > 0.45) || (e.state === 'leap' && e.leapWhy === 'breach')) {
+          const rx = p.x - e.x, rz = p.z - e.z, along = rx * e.lockX + rz * e.lockZ, side = rx * e.lockZ - rz * e.lockX;
+          if (along > -1 && Math.abs(side) < 2.2) return { x: e.lockZ * Math.sign(side || 1), z: -e.lockX * Math.sign(side || 1) };
+        }
+        continue;
+      }
+      // The Queen's dive: out of the ring before she lands.
+      if (e.boss && e.flying && (e.state === 'rise' || e.state === 'dive') && Math.hypot(p.x - e.tx, p.z - e.tz) < 2.7) return away(e.tx, e.tz);
+      if (e.def?.ai === 'hopper' && (e.state === 'hop' || e.state === 'crouch') && Math.hypot(p.x - e.hopX, p.z - e.hopZ) < 1.8) return away(e.hopX, e.hopZ);
       if (e.boss) {
         if (e.state === 'telegraph' && e.next === 'charge') {
           const rx = p.x - e.x, rz = p.z - e.z, along = rx * e.lockX + rz * e.lockZ, side = rx * e.lockZ - rz * e.lockX;
@@ -161,9 +180,11 @@ export class Bot {
     if (door && g.currentRoom !== r.id) {
       const inner = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dz]) => ({ x: door.tx + 0.5 + dx * 2.5, z: door.tz + 0.5 + dz * 2.5 }))
         .find(t => g.level.regionAt(Math.floor(t.x), Math.floor(t.z)) === r.id);
-      return inner ?? { x: door.tx + 0.5, z: door.tz + 0.5 };
+      const t = inner ?? { x: door.tx + 0.5, z: door.tz + 0.5 };
+      return g.map.walkable(Math.floor(t.x), Math.floor(t.z)) ? t : (g.bankNear(t.x, t.z, r.id) ?? t);
     }
-    return r.center;
+    // A pond room's middle is water: its nearest bank instead.
+    return g.map.walkable(Math.floor(r.center.x), Math.floor(r.center.z)) ? r.center : (g.bankNear(r.center.x, r.center.z, r.id) ?? r.center);
   }
   follow(x, z, it, dt) {
     const g = this.g, p = g.player;

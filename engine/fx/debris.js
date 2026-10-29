@@ -50,6 +50,8 @@ export class Debris {
       else { p.x = nx; p.z = nz; }
       p.y += it.v.y * dt;
       if (p.y < this.floorY + it.radius) {
+        // Pieces that come down in water are gone: a splash, and they sink.
+        if (this.waterAt?.(p.x, p.z)) { it.sink = 0.001; it.proj = null; this.onSplash?.(it, p.x, p.z); continue; }
         p.y = this.floorY + it.radius;
         if (it.v.y < -2) {
           it.onBounce?.(it, p.x, p.y, p.z, 'floor', -it.v.y);

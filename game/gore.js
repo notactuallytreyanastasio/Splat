@@ -28,6 +28,12 @@ export class Gore {
     this.confetti.solidAt = solidAt;
     this.decals = new DecalLayer(scene, map.w, map.h, { ppu: 22 });
     this.debris = new Debris(scene, { max: 170, solidAt, dispose: disposeTree });
+    // The pond takes what falls in it: limbs sink with a plop, blood leaves no stain.
+    if (map.hasWater) {
+      this.debris.waterAt = (x, z) => map.waterAt(x, z);
+      this.debris.onSplash = (it, x, z) => { this.confettiBurst(x, 0.05, z, 6, 2, [0xffffff, 0xd6f3ff]); if (Math.hypot(it.v.x, it.v.z) > 3 || it.v.y < -4) this.game.sfx.play('splash', { pitch: 1.6, gap: 0.08 }); };
+      this.decals.skip = (x, z) => map.waterAt(x, z);
+    }
     // Settled limbs and corpses are baked into static batches: the floor keeps every
     // body for the whole run at a couple of draw calls per dozen.
     this.settled = []; this.batches = [];
@@ -136,8 +142,10 @@ export class Gore {
       // a bug's width per frame and the 3rd and 4th pins were being skipped.
       const sx = p.x - lx, sz = p.z - lz, len2 = sx * sx + sz * sz || 1e-6;
       const segDist = e => { const t = Math.max(0, Math.min(1, ((e.x - lx) * sx + (e.z - lz) * sz) / len2)); return Math.hypot(e.x - (lx + sx * t), e.z - (lz + sz * t)); };
-      for (const e of g.world.query((p.x + lx) / 2, (p.z + lz) / 2, Math.sqrt(len2) / 2 + r, e => e.team === 'enemy' && e.hittable && !e.carried && e.def && !it.proj.hit.has(e) && segDist(e) < r + e.radius)) {
+      for (const e of g.world.query((p.x + lx) / 2, (p.z + lz) / 2, Math.sqrt(len2) / 2 + r, e => (e.team === 'enemy' || e.prop) && e.hittable && !e.carried && e.def && !it.proj.hit.has(e) && segDist(e) < r + e.radius)) {
         it.proj.hit.add(e);
+        // A flying limb sets off a puffball too.
+        if (e.prop) { if (!g.guest) g.puffBoom(e, { source: g.player }); continue; }
         g.corpseImpact(it, e, sp);
         if (!it.proj) break;
       }

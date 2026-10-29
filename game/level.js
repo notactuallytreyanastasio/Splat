@@ -19,18 +19,31 @@ export const LEGEND = {
   'f': { name: 'butterfly', color: '#c8b2ff', spawn: 'butterfly' },
   'B': { name: 'rhino beetle', color: '#a9b8ff', spawn: 'beetle' },
   'M': { name: 'empress mantis', color: '#7fd6a0', spawn: 'mantis' },
+  'r': { name: 'frog', color: '#8fe08a', spawn: 'frog' },
+  'K': { name: 'old gold the koi', color: '#ff9b4a', spawn: 'koi' },
+  'b': { name: 'bee', color: '#ffd84d', spawn: 'bee' },
+  'H': { name: 'beehive', color: '#e0a030', spawn: 'hive' },
+  'p': { name: 'puffball', color: '#f4e6ff', spawn: 'puff' },
+  'Q': { name: 'queen bee', color: '#ffb000', spawn: 'queen' },
+  '~': { name: 'pond water', color: '#5fb8d8' },
+  '=': { name: 'lily pad', color: '#7fcf7a' },
+  'h': { name: 'honey floor', color: '#ffd77a' },
   'j': { name: 'nectar jar', color: '#ffc94d', spawn: 'jar' },
   'o': { name: 'mushroom pillar', color: '#ff9ecb' },
   '*': { name: 'flower', color: '#fff1a1' },
   ' ': { name: 'void', color: '#3a2346' },
 };
 const SOLID = '#o';
+const WATER = '~';
+// Spawns that are props, not bugs; and the bosses (a room with one is a boss room).
+export const PROPS = new Set(['jar', 'hive', 'puff']);
+export const BOSSES = new Set(['mantis', 'koi', 'queen']);
 const FLOOR_PALETTES = [
   [0xffe3ee, 0xfff6fa], [0xd9f7e8, 0xf0fff7], [0xe9e0ff, 0xf7f3ff], [0xffe6d2, 0xfff5ec], [0xdff0ff, 0xf3faff],
 ];
 
 export function parseLevel(json) {
-  const map = new TileMap(json.rows, { solid: SOLID, void: ' ' });
+  const map = new TileMap(json.rows, { solid: SOLID, void: ' ', water: WATER });
   const spawns = [];
   let start = null;
   for (let z = 0; z < map.h; z++) for (let x = 0; x < map.w; x++) {
@@ -38,7 +51,8 @@ export function parseLevel(json) {
     if (!L?.spawn) continue;
     if (L.spawn === 'player') start = { x: x + 0.5, z: z + 0.5 };
     else spawns.push({ type: L.spawn, x: x + 0.5, z: z + 0.5, tx: x, tz: z });
-    map.set(x, z, '.');
+    // A boss that lives in the pond keeps its water under it.
+    map.set(x, z, L.spawn === 'koi' ? '~' : '.');
   }
   const { regions, regionAt } = map.regions(ch => ch !== '#' && ch !== ' ' && ch !== '+');
   const rooms = regions.map(r => {
@@ -57,8 +71,8 @@ export function parseLevel(json) {
     for (const r of adj) rooms[r].doors.push(d);
   }
   for (const r of rooms) {
-    r.boss = r.spawns.some(s => s.type === 'mantis');
-    r.combat = r.spawns.some(s => !['jar'].includes(s.type));
+    r.boss = r.spawns.some(s => BOSSES.has(s.type));
+    r.combat = r.spawns.some(s => !PROPS.has(s.type) || s.type === 'hive');
   }
   return { map, rooms, doors, start, regionAt, name: json.name ?? 'level' };
 }
@@ -76,12 +90,18 @@ export function buildLevelMeshes(scene, L, rng, theme = {}) {
       const stripe = (x + z) % 2 ? 0x95dcae : 0x86cf9f;
       return { height: low ? 0.55 : 1.9, top: vcol(hd(0xc6f5d2)), side: vcol(hd(stripe)), inset: 0 };
     }
+    if (ch === '~' || ch === '=') {
+      // The pond bed: deep in the middle, lighter where it shelves up to the bank.
+      const shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => { const c = map.at(x + dx, z + dz); return c !== '~' && c !== '='; });
+      return { height: -0.34, base: -0.7, top: vcol(fl(shore ? 0x7cc9d6 : 0x58a9c9), 0.98 + ((x * 5 + z * 3) % 4) * 0.012), inset: 0 };
+    }
     const rid = regionAt(x, z);
     let pal = FLOOR_PALETTES[(rid < 0 ? 0 : rid) % FLOOR_PALETTES.length];
     if (L.rooms[rid]?.boss) { const c = new THREE.Color(RAINBOW[((x + z) >> 1) % 6]).lerp(new THREE.Color(0xffffff), 0.55); c.setHex(fl(c.getHex())); return { height: 0, top: [c.r, c.g, c.b], inset: 0.035 }; }
     let col = pal[(x + z) % 2];
     if (ch === ',') col = 0xffd0e4;
     if (ch === '+') col = 0xf2d0ff;
+    if (ch === 'h') col = (x + z) % 2 ? 0xffd77a : 0xffcc5c;
     const jitter = 0.97 + ((x * 7 + z * 13) % 5) * 0.012;
     return { height: 0, top: vcol(fl(col), jitter), inset: 0.035 };
   };
@@ -97,6 +117,9 @@ export function buildLevelMeshes(scene, L, rng, theme = {}) {
     const ch = map.at(x, z);
     if (ch === 'o') { const m = mushroom(new ToonKit(), x + 0.5, z + 0.5, rng); props.add(m); occluders.push(m); bumpers.set(z * map.w + x, m); }
     else if (ch === '*') props.add(flower(kit, x + 0.5, z + 0.5, rng, 0.7 + rng.next() * 0.5));
+    else if (ch === '=') props.add(lilyPad(kit, x + 0.5, z + 0.5, rng));
+    else if (ch === '~' && rng.chance(0.06)) props.add(lotus(kit, x + 0.2 + rng.next() * 0.6, z + 0.2 + rng.next() * 0.6, rng));
+    else if (ch === 'h' && rng.chance(0.12)) props.add(honeyDrip(kit, x + rng.next(), z + rng.next(), rng));
     else if (ch === '#') {
       const s = style(x, z);
       // Flowers sprout from hedge tops.
@@ -108,7 +131,44 @@ export function buildLevelMeshes(scene, L, rng, theme = {}) {
   const decor = props.children.filter(c => !occluders.includes(c));
   if (decor.length) { scene.add(bakeStatic(decor)); for (const c of decor) props.remove(c); }
   for (const d of L.doors) { d.mesh = gate(kit, d); d.mesh.position.y = -2; scene.add(d.mesh); }
-  return { mesh, props, occluders, bumpers, w: map.w, wobbling: new Set() };
+  const water = map.hasWater ? waterSurface(scene, map, theme) : null;
+  return { mesh, props, occluders, bumpers, w: map.w, wobbling: new Set(), water };
+}
+
+// The water's skin: one merged sheet over every water tile, a ripple texture in world
+// coordinates (so tiles meet seamlessly) that drifts; game.render moves it.
+function waterSurface(scene, map, theme) {
+  const pos = [], uv = [], idx = [], y = -0.12;
+  for (let z = 0; z < map.h; z++) for (let x = 0; x < map.w; x++) {
+    const c = map.at(x, z);
+    if (c !== '~' && c !== '=') continue;
+    const i = pos.length / 3;
+    for (const [px, pz] of [[x, z], [x, z + 1], [x + 1, z + 1], [x + 1, z]]) { pos.push(px, y, pz); uv.push(px / 3, pz / 3); }
+    idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.fillStyle = 'rgba(255,255,255,0)'; c.fillRect(0, 0, 128, 128);
+  c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 3; c.lineCap = 'round';
+  // Little wave marks, the kind you draw on a map, scattered so the tiling does not show.
+  const marks = [[18, 22], [70, 14], [104, 48], [40, 60], [88, 92], [14, 100], [58, 112], [116, 118]];
+  for (const [mx, my] of marks) { c.beginPath(); c.moveTo(mx - 9, my); c.quadraticCurveTo(mx - 4.5, my - 5, mx, my); c.quadraticCurveTo(mx + 4.5, my + 5, mx + 9, my); c.stroke(); }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const tint = new THREE.Color(theme.water ?? 0xbfefff);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: tex, color: tint, transparent: true, opacity: 0.55, depthWrite: false }));
+  m.renderOrder = 1;
+  scene.add(m);
+  return { mesh: m, tex };
+}
+export function updateWater(L, t) {
+  if (!L.water) return;
+  L.water.tex.offset.set(Math.sin(t * 0.21) * 0.12 + t * 0.015, Math.cos(t * 0.17) * 0.1 + t * 0.01);
 }
 
 // Mushrooms are pinball bumpers. A hit squashes the cap and leans the whole stalk away
@@ -177,6 +237,33 @@ function flower(kit, x, z, rng, s = 1) {
   g.scale.setScalar(s);
   g.position.set(x, 0, z);
   g.rotation.y = rng.next() * 6;
+  return g;
+}
+function lilyPad(kit, x, z, rng) {
+  const g = new THREE.Group();
+  // A notched disc: the notch is what makes it read as a lily pad and not a plate.
+  const pad = kit.part('cylinder', 0x8fd98a, { s: [1.08, 0.06, 1.08], p: [0, -0.05, 0], parent: g, outline: 0.02, shadow: false });
+  const notch = kit.part('cone', 0x58a9c9, { s: [0.18, 0.08, 0.5], p: [0.42, -0.04, 0], r: [0, 0, Math.PI / 2], parent: g, outline: false, shadow: false });
+  notch.visible = rng.chance(0.85);
+  pad.rotation.y = rng.next() * 6;
+  for (let i = 0; i < 5; i++) kit.part('box', 0x6fc06a, { s: [0.03, 0.01, 0.42], p: [0, -0.015, 0], r: [0, i * 0.63, 0], parent: g, outline: false, shadow: false });
+  if (rng.chance(0.3)) { const f = flower(kit, 0.2, 0.2, rng, 0.45); f.position.y = -0.05; g.add(f); }
+  g.position.set(x, 0, z);
+  g.rotation.y = rng.next() * 6;
+  return g;
+}
+function lotus(kit, x, z, rng) {
+  const g = new THREE.Group(), col = rng.pick([0xffb3d1, 0xfffbff, 0xe2d4ff]);
+  kit.part('cylinder', 0x8fd98a, { s: [0.6, 0.04, 0.6], p: [0, -0.1, 0], parent: g, outline: 0.015, shadow: false });
+  for (let i = 0; i < 7; i++) kit.part('lowSphere', col, { s: [0.12, 0.2, 0.08], p: [Math.cos(i * 0.9) * 0.09, 0.02, Math.sin(i * 0.9) * 0.09], r: [Math.sin(i * 0.9) * 0.5, 0, -Math.cos(i * 0.9) * 0.5], parent: g, outline: 0.012, shadow: false });
+  kit.part('lowSphere', 0xffd66b, { s: 0.08, p: [0, 0.05, 0], parent: g, outline: false, shadow: false });
+  g.position.set(x, 0, z);
+  return g;
+}
+function honeyDrip(kit, x, z, rng) {
+  const g = new THREE.Group();
+  kit.part('lowSphere', 0xffb72e, { s: [0.3 + rng.next() * 0.3, 0.04, 0.25 + rng.next() * 0.3], p: [0, 0.01, 0], parent: g, outline: false, shadow: false, mat: { transparent: true, opacity: 0.8 } });
+  g.position.set(x, 0, z);
   return g;
 }
 function tuft(kit, x, z, rng, color = 0xa8e6b8) {

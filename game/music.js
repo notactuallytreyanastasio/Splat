@@ -24,7 +24,11 @@
 // shaped by an arch over each 8-bar period; plucks darken as they ring (a bright wave
 // layered over a dull one); flute and reed get vibrato on held notes; the pad chorus-beats.
 // `node tools/score.mjs` renders every scene to WAV + spectrogram to check by ear.
-const N = n => 440 * Math.pow(2, (n - 69) / 12);
+// A song may carry `transpose` (semitones): the pond and the hive play the garden's and
+// the Empress's scores in their own keys and tempos. Chords stay as written, so the kill
+// song's fitting (killsong.js) still works; only the pitch that sounds moves.
+let playing = null;
+const N = n => 440 * Math.pow(2, (n + (playing?.song?.transpose ?? 0) - 69) / 12);
 const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const ramp = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -405,6 +409,7 @@ const choir = level => ({ level, send: 0.7, play(s, t, step, chord, out, spb, m)
 } });
 
 export function defineMusic(m) {
+  playing = m;
   const G = (i, c, h) => 1 - ramp(h, 0.35, 0.95);
   // A killing spree sings over the score (killsong.js): the tune steps back for it.
   const tune = (i, c, h, mm) => G(i, c, h) * (1 - 0.6 * (mm.spree ?? 0));
@@ -468,6 +473,15 @@ export function defineMusic(m) {
       ...machine({ voices: ['A4', 'E5', 'C5', 'D5'], piano: [['E6', 'D6'], ['A5'], ['C6', 'B5', 'E5'], ['D6']] }),
     },
   });
+
+  // The other stages: the same scores in other keys and tempos, the mix leaning elsewhere.
+  // The pond is slower and a whole step down, bells over the tick; the hive is quicker and
+  // a step up. Their bosses take the Empress's score the same way.
+  const variant = (from, name, o) => m.define(name, { ...m.songs[from], ...o, mix: { ...m.songs[from].mix, ...o.mix } });
+  variant('garden', 'pond', { bpm: 102, transpose: -2, mix: { bell: 0.95 } });
+  variant('garden', 'hive', { bpm: 128, transpose: 2, mix: { bell: 0.3 } });
+  variant('empress', 'koi', { bpm: 120, transpose: -3 });
+  variant('empress', 'queen', { bpm: 142, transpose: 2 });
 
   const FC = ch('F', 'C3', 'A3 C4 F4');
   m.define('victory', {
