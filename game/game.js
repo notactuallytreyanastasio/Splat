@@ -23,7 +23,7 @@ import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from '
 import { Gore } from './gore.js';
 import { Hud } from './hud.js';
 import { defineSounds } from './sounds.js';
-import { rollBoons } from './boons.js';
+import { rollBoons, boonById } from './boons.js';
 import { Bot } from './bot.js';
 import { Telemetry } from './telemetry.js';
 import { RAINBOW, goreChunk } from './models.js';
@@ -97,6 +97,8 @@ export class Game {
     this.bot = opts.bot ? new Bot(this, opts.botskill ?? 1) : null;
     this.intent = emptyIntent();
     if (opts.start != null && !this.guest) this.skipToRoom(+opts.start);
+    // ?boons=sticky,ricochet starts the run with those boons (testing and screenshots).
+    for (const id of (opts.boons ?? '').split(',')) { const b = boonById(id); if (b) { b.apply(this.player); this.player.boons = [...(this.player.boons ?? []), b.id]; this.telemetry.boon(b); } }
     this.view.snap(this.player.x, this.player.z);
     this.loop = new Loop({ update: (dt, frozen) => this.update(dt, frozen), render: dt => this.render(dt) });
     this.loop.speed = opts.speed ?? 1;
@@ -182,6 +184,10 @@ export class Game {
       case 'lose': return this.lose();
       case 'restart': return this.restart(false, d.seed);
       case 'parried': return this.parriedFx(d);
+      case 'arm': { const e = this.world.byId.get(d.id); if (e) e.armed = true; return; }
+      case 'sb': return this.stickyFx(d);
+      case 'rc': return this.ricochetFx(d);
+      case 'yank': return this.yankFx(d);
     }
   }
 
@@ -403,7 +409,8 @@ export class Game {
     t.dead = true;
     if (t.carried) { t.carried.holding = null; t.carried = null; }
     const overkill = -t.hp > t.maxHp * 0.3 || ['heavy', 'finisher', 'impact', 'wall', 'trample', 'scythe', 'boom', 'land'].includes(info.kind) || t.speed > 9 || t.boss;
-    this.fx('kill', { id: t.nid, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 4, o: overkill ? 1 : 0, tm: info.team === 'player' ? 1 : 0, ch: t.chain || 0 });
+    this.fx('kill', { id: t.nid, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 4, o: overkill ? 1 : 0, tm: info.team === 'player' ? 1 : 0, ch: t.chain || 0, bw: (info.team === 'player' && (t.lastHitBy ?? this.player).stats.bowling) || undefined });
+    if (t.sticky) this.stickyBoom(t); // a bomb killed before it lands still goes off: chain reactions
     this.streak++; this.streakT = 2.6;
     this.bestStreak = Math.max(this.bestStreak, this.streak);
     if (STREAKS[this.streak]) { this.fx('st', { n: this.streak, t: STREAKS[this.streak] }); this.fx('sx', { n: 'streak', o: { pitch: 1 + this.streak * 0.04 } }); }
@@ -433,7 +440,8 @@ export class Game {
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
     // Corpses are only projectiles on the host, where damage is decided.
-    this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null }, !!d.o);
+    t.armed = false;
+    this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null, bowling: d.bw ?? 0 }, !!d.o);
     this.sfx.play('squish');
     this.sfx.play('squeak', { pitch: 0.8 + Math.random() * 0.6 });
   }
@@ -458,6 +466,7 @@ export class Game {
     this.damage(other, { amount: dmg, dirX, dirZ, knock: rel * 0.8 * mover.mass, lift: 3, stun: 0.7, team: 'player', kind: 'impact', chain, source });
     if (!mover.dead) this.damage(mover, { amount: dmg * 0.5, dirX: -dirX, dirZ: -dirZ, knock: 0, team: 'player', kind: 'impact', source });
     mover.vx *= 0.55; mover.vz *= 0.55;
+    if (mover.sticky) this.stickyBoom(mover);
     this.telemetry.impact(chain);
     this.fx('sx', { n: 'bonk', o: { pitch: 0.8 + chain * 0.15 } });
     if (chain >= 2) { this.say(`PINBALL x${chain}!`, other.x, 2.2, other.z, { cls: 'pinball', scale: 1 + chain * 0.15, life: 1.2 }); this.loop.freeze(0.08 + chain * 0.02); }
@@ -465,15 +474,25 @@ export class Game {
   }
   corpseImpact(it, e, sp) {
     if (this.guest) return;
-    const { mass, chain } = it.proj, dirX = it.v.x / sp, dirZ = it.v.z / sp;
-    const dmg = sp * 1.9 * Math.sqrt(mass) * (1 + 0.3 * (chain - 1));
+    const { chain, bw } = it.proj, dirX = it.v.x / sp, dirZ = it.v.z / sp;
+    // Bowling Ball: every piece counts as 2.5x heavier (4x with two), so a gib hits like a
+    // corpse and a corpse like a beetle, and it keeps 88% of its speed through each bug.
+    const mass = it.proj.mass * (1 + 1.5 * bw), pins = ++it.proj.pins;
+    const dmg = sp * 1.9 * Math.sqrt(mass) * (1 + 0.3 * (chain - 1)) * (bw ? 1.25 : 1);
     e.chain = chain; e.thrownBy = 'player';
-    this.damage(e, { amount: dmg, dirX, dirZ, knock: sp * 0.7 * Math.max(0.5, mass), lift: 2.5, stun: 0.6, team: 'player', kind: 'impact', chain });
-    it.v.multiplyScalar(0.6);
+    this.damage(e, { amount: dmg, dirX, dirZ, knock: Math.min(24, sp * 0.7 * Math.max(0.5, mass)), lift: bw ? 4 : 2.5, stun: bw ? 1 : 0.6, team: 'player', kind: 'impact', chain });
+    it.v.multiplyScalar(bw ? 0.88 : 0.6);
     this.telemetry.impact(chain);
-    this.fx('sx', { n: 'bonk', o: { pitch: 0.7 + chain * 0.15 } });
-    if (chain >= 2) { this.say(`PINBALL x${chain}!`, e.x, 2.2, e.z, { cls: 'pinball', scale: 1 + chain * 0.15, life: 1.2 }); this.loop.freeze(0.06 + chain * 0.02); }
-    else this.say(mass < 0.5 ? 'SHRAPNEL!' : 'CORPSE BOWLING!', e.x, 2, e.z, { cls: 'bonk' });
+    this.fx('sx', { n: 'bonk', o: { pitch: (bw ? 0.45 : 0.7) + chain * 0.15 } });
+    if (bw) {
+      this.fx('sx', { n: 'thud' });
+      this.fx('sh', { a: 0.12 + 0.05 * pins });
+      this.fx('cf', { x: r2(e.x), y: 0.4, z: r2(e.z), n: 10, p: 4, c: [0xc8b2ff, 0xffffff, 0xfff1a1] });
+    }
+    if (bw && pins >= 3) { if (pins === 3) this.telemetry.c.strikes++; this.say(pins >= 4 ? 'TURKEY!' : 'STRIKE!', e.x, 2.4, e.z, { cls: 'pinball', scale: 1.4 + pins * 0.1, life: 1.3 }); this.loop.freeze(0.1); }
+    else if (bw && pins === 2 && chain < 2) this.say('SPARE!', e.x, 2.2, e.z, { cls: 'bonk', scale: 1.2 });
+    else if (chain >= 2) { this.say(`PINBALL x${chain}!`, e.x, 2.2, e.z, { cls: 'pinball', scale: 1 + chain * 0.15, life: 1.2 }); this.loop.freeze(0.06 + chain * 0.02); }
+    else this.say(it.proj.mass < 0.5 ? 'SHRAPNEL!' : 'CORPSE BOWLING!', e.x, 2, e.z, { cls: 'bonk' });
   }
   wallSlam(e, hit) {
     if (this.guest || (e.lastSlam != null && e.age - e.lastSlam < 0.3)) return;
@@ -486,6 +505,92 @@ export class Game {
     this.fx('sh', { a: 0.3 });
     this.telemetry.wallSlam();
     this.damage(e, { amount: dmg, dirX: hit.nx, dirZ: hit.nz, knock: 0, stun: 0.8, team: 'player', kind: 'wall', source: e.lastHitBy });
+    if (e.sticky) this.stickyBoom(e);
+    else if (!e.dead) this.ricochet(e, hit);
+  }
+  // Ricochet: the wall gives the speed back (elastic instead of 25% restitution) and the
+  // rebound bends up to 70% toward a bug in front, so a bank shot usually finds someone.
+  ricochet(e, hit) {
+    const st = (e.lastHitBy ?? this.player).stats;
+    if (!st.ricochet || e.boss || (e.ricochets ?? 0) >= st.ricochet) return;
+    e.ricochets = (e.ricochets ?? 0) + 1; this.telemetry.c.ricochets++;
+    e.vx += hit.nx * hit.speed * (1 - e.restitution); e.vz += hit.nz * hit.speed * (1 - e.restitution);
+    const l0 = Math.hypot(e.vx, e.vz) || 1, sp = l0 * 0.95;
+    let dx = e.vx / l0, dz = e.vz / l0;
+    const tgt = this.world.nearest(e.x, e.z, o => {
+      if (o === e || o.team !== 'enemy' || !o.hittable || o instanceof Pollen || o.carried) return false;
+      const ox = o.x - e.x, oz = o.z - e.z, l = Math.hypot(ox, oz) || 1;
+      return (ox * dx + oz * dz) / l > 0.5;
+    }, 9);
+    if (tgt) {
+      const ox = tgt.x - e.x, oz = tgt.z - e.z, l = Math.hypot(ox, oz) || 1;
+      dx = dx * 0.3 + ox / l * 0.7; dz = dz * 0.3 + oz / l * 0.7;
+      const m = Math.hypot(dx, dz) || 1; dx /= m; dz /= m;
+    }
+    e.vx = dx * sp; e.vz = dz * sp; e.vy = Math.max(e.vy, 2);
+    e.thrownBy = 'player'; e.stun = Math.max(e.stun, 1); e.impacted.clear();
+    e.lastSlam = e.age - 0.15; // the next wall may splat after 0.15s instead of 0.3s
+    this.fx('rc', { x: r2(e.x - hit.nx * e.radius), z: r2(e.z - hit.nz * e.radius), nx: r2(hit.nx), nz: r2(hit.nz), n: e.ricochets });
+  }
+  ricochetFx(d) {
+    this.gore.confettiBurst(d.x, 0.8, d.z, 22, 7, [0xfff1a1, 0xffffff, 0xa6dcff]);
+    this.sfx.play('bonk', { pitch: 2.2 + d.n * 0.3 });
+    this.sfx.play('parry');
+    this.floaters.spawn(d.n > 1 ? `RICOCHET x${d.n}!` : 'RICOCHET!', d.x + d.nx * 0.6, 2.2, d.z + d.nz * 0.6, { cls: 'pinball', scale: 1.15, life: 1 });
+    // A spark diamond flat against the wall face.
+    const star = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.5, 4), new THREE.MeshBasicMaterial({ color: 0xfff1a1, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+    star.position.set(d.x + d.nx * 0.05, 0.8, d.z + d.nz * 0.05);
+    star.lookAt(d.x + d.nx, 0.8, d.z + d.nz);
+    this.scene.add(star);
+    this.slashes.push({ g: star, t: 0, dur: 0.25, ring: true });
+    this.view.shake(0.18);
+  }
+  // Sticky Bomb: the thrown bug is the warhead. Damage falls off to half at the rim.
+  stickyBoom(e) {
+    if (!e.sticky || this.guest) return;
+    const dmg = e.sticky, x = e.x, z = e.z, r = 2.4, by = e.lastHitBy;
+    e.sticky = 0; this.telemetry.c.bombs++;
+    this.pending.push(() => {
+      this.fx('sb', { id: e.nid, x: r2(x), z: r2(z), r, c: e.def?.blood });
+      for (const o of this.world.query(x, z, r, o => o.team === 'enemy' && o.hittable && !(o instanceof Pollen))) {
+        const ox = o.x - x, oz = o.z - z, l = Math.hypot(ox, oz), a = l > 0.05 ? Math.atan2(ox, oz) : Math.atan2(e.vx, e.vz);
+        this.damage(o, { amount: dmg * (o === e ? 1.5 : 1 - 0.5 * Math.min(1, l / r)), dirX: Math.sin(a), dirZ: Math.cos(a), knock: 13, lift: 5, stun: 0.9, team: 'player', kind: 'boom', source: by });
+      }
+    });
+  }
+  stickyFx(d) {
+    const e = this.world.byId.get(d.id);
+    if (e) e.armed = false;
+    this.gore.confettiBurst(d.x, 0.7, d.z, 50, 10, [0xff5fa2, 0xff9ecb, 0xffffff, 0xfff1a1]);
+    this.gore.spray(d.x, 0.8, d.z, 0, 0, 50, 7, d.c ?? [0xd4002e, 0xff7eb6]);
+    this.gore.decals.splat(d.x, d.z, d.r * 0.55, '#ff5fa2');
+    this.gore.decals.splat(d.x, d.z, d.r * 0.3, '#c4002a');
+    for (const [r0, col, dur] of [[0.5, 0xff5fa2, 0.32], [0.3, 0xffffff, 0.2]]) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r0 + 0.22, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(d.x, 0.3, d.z);
+      this.scene.add(ring);
+      this.slashes.push({ g: ring, t: 0, dur, ring: true });
+    }
+    this.floaters.spawn('KABLOOEY!', d.x, 2.6, d.z, { cls: 'pinball', scale: 1.4, life: 1.1 });
+    this.sfx.play('pop'); this.sfx.play('slam');
+    this.view.shake(0.45); this.view.kick(0.04);
+    this.loop.freeze(0.07);
+  }
+  // Long Arms: a grab from past the normal reach draws a quick mint arm out to the bug.
+  yankFx(d) {
+    const dx = d.x2 - d.x1, dz = d.z2 - d.z1, l = Math.hypot(dx, dz) || 1;
+    const g = new THREE.Group();
+    for (const [w, col, y] of [[0.36, 0x3a2346, 0], [0.2, 0x9ff0d4, 0.02]]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.position.y = y;
+      g.add(m);
+    }
+    g.position.set((d.x1 + d.x2) / 2, 0.9, (d.z1 + d.z2) / 2);
+    g.rotation.y = Math.atan2(dx, dz);
+    this.scene.add(g);
+    this.slashes.push({ g, t: 0, dur: 0.2, yank: true });
+    this.sfx.play('dodge');
+    this.gore.confettiBurst(d.x2, 1, d.z2, 8, 3, [0x9ff0d4, 0xffffff]);
   }
   onLand(e, impact) {
     if (e instanceof Player || this.guest) return;
@@ -680,7 +785,15 @@ export class Game {
     this.slashes.push({ g, t: 0, dur: 0.16 });
   }
   onWhirl(p) { this.hud.banner('', 'RAINBOW BLENDER', 1); this.sfx.play('whirl'); this.telemetry.special(); }
-  onGrab(p, e) { this.sfx.play('grab'); if (p === this.player) this.floaters.spawn('GOTCHA', e.x, 2.2, e.z, { cls: 'bonk' }); this.telemetry.grab(); }
+  onGrab(p, e, dist = 0) {
+    this.sfx.play('grab');
+    if (p === this.player) this.floaters.spawn(dist > 1.9 ? 'YOINK!' : 'GOTCHA', e.x, 2.2, e.z, { cls: 'bonk' });
+    this.telemetry.grab();
+    if (this.guest) return;
+    if (dist > 1.9) this.telemetry.c.yanks++;
+    if (dist > 1.9) this.fx('yank', { x1: r2(p.x), z1: r2(p.z), x2: r2(e.x), z2: r2(e.z) });
+    if (p.stats.sticky) this.fx('arm', { id: e.nid });
+  }
   onThrow(p, e) { this.sfx.play('throw'); this.telemetry.throw_(); if (p === this.player) this.view.shake(0.1); }
   onReflect(b) { this.fx('sx', { n: 'bonk', o: { pitch: 1.8 } }); this.say('RETURN TO SENDER', b.x, 1.8, b.z, { cls: 'bonk' }); this.telemetry.reflect(); }
   onPotion(p) { this.sfx.play('potion'); this.gore.confettiBurst(p.x, 1, p.z, 16, 3, [0xff5fa2, 0xffffff]); this.floaters.spawn('+HP', p.x, 2, p.z, { cls: 'heal' }); this.telemetry.potion(); }
@@ -898,6 +1011,7 @@ export class Game {
       const s = this.slashes[i];
       s.t += dt;
       if (s.ring) { s.g.material.opacity = 0.9 * (1 - s.t / s.dur); s.g.scale.setScalar(1 + (s.t / s.dur) * 3); }
+      else if (s.yank) s.g.scale.set(Math.max(0.01, 1 - s.t / s.dur), 1, 1);
       else { s.g.children[0].material.opacity = 0.85 * (1 - s.t / s.dur); s.g.scale.setScalar(0.8 + (s.t / s.dur) * 0.3); }
       if (s.t >= s.dur) { this.scene.remove(s.g); this.slashes.splice(i, 1); }
     }

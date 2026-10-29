@@ -70,7 +70,7 @@ export class Bot {
       if (target !== this.target || target.hp < this.targetHp) { this.target = target; this.targetHp = target.hp; this.targetT = now; }
       if (now - this.targetT > 6 && !target.boss) { this.ignore.set(target, now + 15); this.target = null; }
       // Throw a small bug at the boss or a crowd if one is right here.
-      const grabbable = foes.find(e => e.grabbable?.() && dist(e) < 1.5) ?? (boss ? foes.find(e => e.baby && e.grabbable() && dist(e) < 4) : null);
+      const grabbable = foes.find(e => (e.grabbable?.() || (p.stats.grabAny && e.def?.grab === 'stunned')) && dist(e) < 1.5 * p.stats.grabRange) ?? (boss ? foes.find(e => e.baby && e.grabbable() && dist(e) < 4) : null);
       const throwTarget = boss ?? (foes.length >= 3 ? target : null);
       this.grabCd = (this.grabCd ?? 0) - dt;
       if (grabbable && throwTarget && grabbable !== throwTarget && this.grabCd <= 0) { aimAt(grabbable.x, grabbable.z); it.grab = true; this.grabCd = boss ? 0.5 : 2.5; this.grabbing = 0.35; return it; }

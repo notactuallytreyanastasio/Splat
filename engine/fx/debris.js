@@ -51,7 +51,7 @@ export class Debris {
           it.v.y *= -it.bounce;
           it.w.multiplyScalar(0.6);
         } else it.v.y = 0;
-        it.v.x *= 0.82; it.v.z *= 0.82;
+        it.v.x *= it.friction ?? 0.82; it.v.z *= it.friction ?? 0.82;
         it.w.multiplyScalar(0.9);
       }
       const wl = it.w.length();

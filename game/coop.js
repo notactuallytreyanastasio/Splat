@@ -118,7 +118,7 @@ export class Coop {
   // ------------------------------------------------------------ guest -> host requests
   request(t, d = {}) {
     const p = this.g.player, st = p.stats;
-    this.net.send('a', { t, ax: r2(p.aimX), az: r2(p.aimZ), x: r2(p.x), z: r2(p.z), st: { damage: st.damage, crit: st.crit, critMul: st.critMul, knock: st.knock, reach: st.reach, wallDamage: st.wallDamage, explodeOnKill: st.explodeOnKill, throwPower: st.throwPower }, ...d });
+    this.net.send('a', { t, ax: r2(p.aimX), az: r2(p.aimZ), x: r2(p.x), z: r2(p.z), st: { damage: st.damage, crit: st.crit, critMul: st.critMul, knock: st.knock, reach: st.reach, wallDamage: st.wallDamage, explodeOnKill: st.explodeOnKill, throwPower: st.throwPower, ricochet: st.ricochet, sticky: st.sticky, grabRange: st.grabRange, grabAny: st.grabAny, bowling: st.bowling }, ...d });
   }
   onAction(m) {
     const rp = this.remotes.get(m.from);

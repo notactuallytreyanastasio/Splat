@@ -27,7 +27,7 @@ const json = level.startsWith('local:')
   : await (await fetch(`game/levels/${level}.json`, { cache: 'no-store' })).json();
 document.getElementById('hud').innerHTML = '';
 const game = new Game(document.getElementById('game'), json, {
-  seed, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'),
+  seed, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), boons: q.get('boons'),
 });
 // Debug/automation surface used by tools/playtest.mjs.
 window.__game = game;
