@@ -1015,7 +1015,9 @@ export class Game {
     this.lastRender = now;
     const frozen = this.loop.hitstop > 0;
     const sdt = frozen ? 0 : dt * this.loop.timeScale;
-    for (const e of this.world.entities) e.sync?.(sdt);
+    // A body killed outside world.update (a guest's killFx, a pending explosion) is still
+    // listed until the next update; posing it would drag its flung limbs back to the rig.
+    for (const e of this.world.entities) if (!e.dead) e.sync?.(sdt);
     updateMushrooms(this.levelMeshes, sdt);
     if (this.slowmo > 0) { this.slowmo -= dt / this.loop.speed; this.loop.timeScale = this.net ? 1 : 0.3; }
     else this.loop.timeScale += (1 - this.loop.timeScale) * Math.min(1, dt * 4);
