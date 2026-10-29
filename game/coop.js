@@ -141,7 +141,7 @@ export class Coop {
       if (!k) continue;
       const row = [e.nid, k, k === 'E' ? e.type : k === 'G' ? e.value : k === 'B' ? e.kind : k === 'P' ? (e.heart ? 1 : 0) : 0, r2(e.x), r2(e.y), r2(e.z)];
       if (k === 'E' || k === 'M') {
-        const flags = (e.elite ? 1 : 0) | (e.active ? 2 : 0) | (e.launched ? 4 : 0) | (e.baby ? 8 : 0) | (e.stun > 0.2 ? 16 : 0);
+        const flags = (e.elite ? 1 : 0) | (e.active ? 2 : 0) | (e.launched ? 4 : 0) | (e.baby ? 8 : 0) | (e.stun > 0.2 ? 16 : 0) | (e.phase2 ? 32 : 0);
         row.push(r2(e.facing), r2(e.spinYaw), r2(e.tumble), r2(e.squash), r2(e.leanX), r2(e.leanZ), e.action ?? 0, r2(e.actionP), r2(e.flash), flags, Math.ceil(e.hp), e.carried?.pid ?? (e.carried ? this.id : 0));
         if (k === 'M') row.push(e.state, e.next ?? 0, r2(e.lockX ?? 0), r2(e.lockZ ?? 0), r2(e.stateT));
       }
@@ -178,7 +178,7 @@ export class Coop {
         const carriedBy = carrier ? this.player(carrier) : null;
         if (carriedBy !== g.player || !carriedBy) e.carried = carriedBy ?? null;
         if (k === 'E') e.state = action === 'windup' ? 'windup' : 'chase';
-        if (k === 'M') { [e.state, e.next, e.lockX, e.lockZ, e.stateT] = row.slice(18); }
+        if (k === 'M') { [e.state, e.next, e.lockX, e.lockZ, e.stateT] = row.slice(18); e.phase2 = !!(flags & 32); }
       }
     }
     for (const e of g.world.entities) if (e.proxy && !(e instanceof Player) && !seen.has(e.nid)) e.dead = true;

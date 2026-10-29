@@ -319,7 +319,8 @@ export function mantis() {
   k.part('sphere', green, { s: [0.9, 0.8, 1.7], p: [0, 0, -0.5], r: [0.35, 0, 0], parent: abdomen });
   for (let i = 0; i < 4; i++) k.part('torus', PAL.pink, { s: [0.42 - i * 0.05, 0.42 - i * 0.05, 0.25], p: [0, 0.1 - i * 0.16, -0.15 - i * 0.32], r: [0.35, 0, 0], parent: abdomen, outline: false });
   const wings = joint(torso, 0, 0.3, -0.3);
-  for (const side of [1, -1]) k.part('sphere', 0xe6f4ff, { s: [0.5, 0.03, 1.7], p: [side * 0.22, 0.1, -0.6], r: [0.3, side * 0.15, side * 0.2], parent: wings, outline: 0.015, mat: { transparent: true, opacity: 0.65, side: THREE.DoubleSide } });
+  const wingL = [1, -1].map(side => k.part('sphere', 0xe6f4ff, { s: [0.5, 0.03, 1.7], p: [side * 0.22, 0.1, -0.6], r: [0.3, side * 0.15, side * 0.2], parent: wings, outline: 0.015, mat: { transparent: true, opacity: 0.65, side: THREE.DoubleSide } }));
+  const wingMat = wingL[0].material;
   const thorax = joint(torso, 0, 0.1, 0.25);
   k.part('capsule', green, { s: [0.42, 0.65, 0.42], p: [0, 0.6, 0.1], r: [-0.25, 0, 0], parent: thorax });
   k.part('heart', PAL.hotpink, { s: 0.3, p: [0, 0.55, 0.32], r: [-0.25, 0, 0], parent: thorax, outline: 0.02 });
@@ -337,6 +338,22 @@ export function mantis() {
     k.part('sphere', 0xff2d6f, { s: 0.35, p: [0, 0, 0.35], parent: e, outline: false });
     k.part('sphere', PAL.white, { s: 0.2, p: [0.15, 0.25, 0.4], parent: e, outline: false });
   }
+  // Phase-two eyes: unlit and transparent, so the baker leaves them alone and hit flashes
+  // (which drive the kit's emissive) cannot wash them out.
+  const glowCore = new THREE.MeshBasicMaterial({ color: 0xff1040, transparent: true, opacity: 1 });
+  const glowHalo = new THREE.MeshBasicMaterial({ color: 0xff3d6e, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
+  const glow = new THREE.Group();
+  for (const side of [1, -1]) {
+    const c = new THREE.Mesh(geo.sphere(), glowCore); c.scale.setScalar(0.2); c.position.set(side * 0.38, 0.12, 0.16);
+    const h = new THREE.Mesh(geo.sphere(), glowHalo); h.scale.setScalar(0.5); h.position.copy(c.position);
+    glow.add(c, h);
+  }
+  glow.visible = false;
+  head.add(glow);
+  // A throbbing red ring on the floor: phase two has to read from straight above too.
+  const aura = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.7, 40), new THREE.MeshBasicMaterial({ color: 0xff1f5a, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
+  aura.rotation.x = -Math.PI / 2; aura.position.y = 0.06; aura.visible = false; aura.renderOrder = 2; // over the blood layer
+  r.root.add(aura);
   const crown = joint(head, 0, 0.32, -0.02);
   k.part('cylinder', PAL.gold, { s: [0.5, 0.1, 0.36], parent: crown });
   for (let i = 0; i < 5; i++) k.part('cone', PAL.gold, { s: [0.09, 0.24, 0.09], p: [(i - 2) * 0.1, 0.15, 0.12], parent: crown, outline: 0.015 });
@@ -361,17 +378,31 @@ export function mantis() {
   r.gibs = [head, crown, ...arms, wings, ...legs, abdomen, thorax, torso];
   r.height = 3.3;
   r.pose = (r, s) => {
-    const p = s.p ?? 0;
+    const p = s.p ?? 0, mad = !!r.enraged;
     legs.forEach((l, i) => l.rotation.x = Math.sin(s.phase * 1.2 + i * 1.6) * 0.4 * Math.max(s.walk, s.action === 'charge' ? 1.5 : 0));
-    thorax.rotation.x = 0; head.rotation.set(0, Math.sin(s.t * 0.7) * 0.2, 0); wings.rotation.x = 0; wings.scale.setScalar(1);
-    let armX = -1.4, armY = 0, fore = 2.4;
-    if (s.action === 'telegraph') { armX = -2.6; fore = 0.6; thorax.rotation.x = -0.25; head.rotation.y = Math.sin(s.t * 40) * 0.08; }
+    thorax.rotation.x = 0; head.rotation.set(0, Math.sin(s.t * 0.7) * 0.2, 0); jaws.rotation.x = 0;
+    // Enraged: wings flared and buzzing, rosy, eyes lit.
+    wings.rotation.x = mad ? -0.45 + Math.sin(s.t * 38) * 0.08 : 0; wings.scale.set(mad ? 1.3 : 1, 1, mad ? 1.15 : 1);
+    wingMat.color.setHex(mad ? 0xffc2d6 : 0xe6f4ff);
+    glow.visible = mad || s.action === 'rear';
+    if (glow.visible) glow.children.forEach((m, i) => { if (i % 2) m.scale.setScalar(0.45 + Math.sin(s.t * 9) * 0.08); });
+    aura.visible = mad;
+    if (mad) { aura.material.opacity = 0.5 + 0.25 * Math.sin(s.t * 6); aura.scale.setScalar(1 + 0.06 * Math.sin(s.t * 6)); }
+    let armX = mad ? -1.4 + Math.sin(s.t * 5) * 0.12 : -1.4, armY = 0, fore = 2.4;
+    if (s.action === 'rear' || s.action === 'roar') {
+      // Rear up: chest back, scythes high and wide, jaws open, screaming at the ceiling.
+      const e = easeOut(Math.min(1, p * (s.action === 'rear' ? 3.5 : 5))), shake = p > 0.22 && p < 0.85 ? Math.sin(s.t * 55) * 0.06 : 0;
+      thorax.rotation.x = -0.55 * e; head.rotation.x = -0.45 * e + shake; head.rotation.y = 0;
+      jaws.rotation.x = 0.5 * e + shake * 3;
+      armX = -1.4 - 1.6 * e; armY = (s.action === 'roar' ? 1.5 : 0.9) * e; fore = 2.4 - 2.0 * e;
+      wings.rotation.x = -0.8 * e + shake; wings.scale.set(1 + 0.4 * e, 1, 1 + 0.2 * e);
+    } else if (s.action === 'telegraph') { armX = -2.6; fore = 0.6; thorax.rotation.x = -0.25; head.rotation.y = Math.sin(s.t * 40) * 0.08; }
     else if (s.action === 'sweep') { const e = easeOut(p * 1.6); armX = -2.6 + e * 1.4; armY = 1.6 - e * 3.2; fore = 0.6 + e * 0.6; thorax.rotation.x = 0.35 * e; }
     else if (s.action === 'charge') { thorax.rotation.x = 0.55; armX = -0.6; fore = 1.0; }
     else if (s.action === 'cast') { wings.rotation.x = -0.9; wings.scale.set(1.3, 1, 1.1); armX = -2.2; fore = 1.5; thorax.rotation.x = -0.3; }
     else if (s.action === 'stunned') { head.rotation.z = Math.sin(s.t * 5) * 0.35; armX = -0.3; fore = 0.8; thorax.rotation.x = 0.3; }
     arms.forEach(a => { a.rotation.set(armX, armY * a.userData.side, 0); a.userData.fore.rotation.x = fore; });
-    r.body.position.y = Math.abs(Math.sin(s.phase)) * 0.05 * s.walk;
+    r.body.position.y = Math.abs(Math.sin(s.phase)) * 0.05 * s.walk + (s.action === 'rear' || s.action === 'roar' ? 0.25 * easeOut(Math.min(1, p * 4)) : 0);
   };
   return r;
 }
