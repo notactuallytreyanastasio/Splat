@@ -59,6 +59,7 @@ player in a room simulates the world, every player simulates their own knight.
 node tools/playtest.mjs --seeds 1,2,3 --speed 3 --skill 0.5   # bot runs, report in tools/out/playtest
 node tools/touchtest.mjs                                       # 5 device layouts, real touch events
 node tools/mix.mjs                                             # meter every sound and music mood offline (dBFS)
+node tools/score.mjs                                           # render the soundtrack scenes to tools/out/score/*.wav + spectrograms
 BASE=https://gaming.bobbby.online node tools/touchtest.mjs     # against the live site
 ```
 

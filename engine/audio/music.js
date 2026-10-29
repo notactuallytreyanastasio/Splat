@@ -16,7 +16,11 @@
 // moment music started and never reset, so loops of different lengths phase against
 // each other and against the bar (info.loop). bus 'clear' skips the tone filter. `send`
 // and `echo` (numbers or fn(music)) feed the shared reverb and tape echo. `ease` is the
-// gain time constant in seconds, or [rise, fall].
+// gain time constant in seconds, or [rise, fall]. `pan` places the whole track once (one
+// panner per track, not one per note: per-note nodes are what a phone pays for).
+// `filter` ({ type, f, q }) puts one filter on the whole track, after its gain; play()
+// reaches it as out.filter to move its cutoff (a 16th-note line filtered per note costs
+// a filter per note).
 const IR_SECONDS = 1.8;
 
 export class Music {
@@ -27,7 +31,7 @@ export class Music {
     this.intensity = 0;
     this.color = 1;   // second knob, 1 bright .. 0 drained; songs decide what it means
     this.heat = 0;    // third knob, 0 calm .. ~1.3 frenzy; songs decide what it means
-    this.volume = 0.32;
+    this.volume = 0.42; // raised from 0.32 when the plucked bass took 2.6 dB of low end out (tools/score.mjs)
     this.level = 1;   // the player's music-volume setting
     this.duck = 1;    // a temporary dip (the pause menu)
     this.step = 0; this.next = 0; this.abs = 0;
@@ -85,7 +89,14 @@ export class Music {
     this.echo.connect(this.delay).connect(lp).connect(fb).connect(this.delay);
     lp.connect(eret).connect(this.out);
   }
-  setTone(hz) { if (this.tone) this.tone.frequency.setTargetAtTime(hz, this.sfx.ctx.currentTime, 0.15); }
+  // The game calls this every frame; only a real change schedules anything, or the filter's
+  // automation list grows by 60 events a second (offline it grows without bound: a
+  // 100 s render of a color sweep ran 3x slower from that alone).
+  setTone(hz) {
+    if (!this.tone || Math.abs(hz - (this.toneHz ?? 0)) < hz * 0.02) return;
+    this.toneHz = hz;
+    this.tone.frequency.setTargetAtTime(hz, this.sfx.ctx.currentTime, 0.15);
+  }
   setVolume(v = this.volume) { this.volume = v; if (this.out) this.out.gain.setTargetAtTime(v * this.level * this.duck, this.sfx.ctx.currentTime, 0.2); }
   start() {
     clearInterval(this.timer);
@@ -107,7 +118,15 @@ export class Music {
     if (!this.tracks.has(name)) {
       const ctx = this.sfx.ctx, g = ctx.createGain();
       g.gain.value = 0; g._target = 0; g._est = 0;
-      g.connect(tr.bus === 'clear' ? this.out : this.tone);
+      const dest = tr.bus === 'clear' ? this.out : this.tone;
+      let node = g;
+      if (tr.filter) {
+        const f = g.filter = ctx.createBiquadFilter();
+        f.type = tr.filter.type ?? 'lowpass'; f.frequency.value = tr.filter.f ?? 2000; f.Q.value = tr.filter.q ?? 0.7;
+        node = node.connect(f);
+      }
+      if (tr.pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = tr.pan; node = node.connect(p); }
+      node.connect(dest);
       if (tr.send != null) { g._send = ctx.createGain(); g._send.gain.value = 0; g.connect(g._send).connect(this.verb); }
       if (tr.echo != null) { g._echo = ctx.createGain(); g._echo.gain.value = 0; g.connect(g._echo).connect(this.echo); }
       this.tracks.set(name, g);

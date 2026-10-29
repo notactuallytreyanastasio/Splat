@@ -113,20 +113,50 @@ export class Sfx {
   // `wave` is a PeriodicWave (one oscillator for a whole timbre); `hold` sustains the peak
   // for that many seconds before the decay, so a pad swells and rings instead of plucking;
   // `pan` adds a stereo panner only when asked for.
-  tone(t, { type = 'sine', wave = null, f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005, hold = 0, pan = null, out = this.voice ?? this.sfxBus } = {}) {
-    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    if (wave) o.setPeriodicWave(wave); else o.type = type;
-    o.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(vol, t + attack);
-    if (hold > 0) g.gain.setValueAtTime(vol, t + attack + hold);
+  // Three more, each costing nodes only when used (the music's instruments use them):
+  //   lp      [from Hz, to Hz, seconds?, q?]: a lowpass that closes over the note (or over
+  //           `seconds`). A moving cutoff makes Chrome recompute the filter every sample,
+  //           so it is several times the cost of the oscillator: from === to sets a fixed
+  //           cutoff, which is cheap. Plucks get their darkening by layering instead.
+  //   detune  cents: a second oscillator that far sharp, the pair beating slowly (chorus).
+  //   vib     [rate Hz, depth cents, delay s]: vibrato that fades in after the delay.
+  tone(t, { type = 'sine', wave = null, f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005, hold = 0, pan = null, lp = null, detune = 0, vib = null, out = this.voice ?? this.sfxBus } = {}) {
+    const ctx = this.ctx, g = ctx.createGain();
     const end = Math.max(t + dur, t + attack + hold + 0.05);
+    const oscs = [];
+    for (const cents of detune ? [0, detune] : [0]) {
+      const o = ctx.createOscillator();
+      if (wave) o.setPeriodicWave(wave); else o.type = type;
+      o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      if (cents) o.detune.value = cents;
+      o.connect(g);
+      oscs.push(o);
+    }
+    if (vib) {
+      const [rate, depth, delay = 0.2] = vib, lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = rate;
+      lg.gain.setValueAtTime(0, t); lg.gain.setValueAtTime(0, t + delay); lg.gain.linearRampToValueAtTime(depth, t + delay + 0.35);
+      lfo.connect(lg);
+      for (const o of oscs) lg.connect(o.detune);
+      lfo.start(t); lfo.stop(end + 0.02);
+    }
+    const v = detune ? vol * 0.62 : vol; // two beating oscillators sum to about 1.6x one
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(v, t + attack);
+    if (hold > 0) g.gain.setValueAtTime(v, t + attack + hold);
     g.gain.exponentialRampToValueAtTime(0.0001, end);
-    let node = o.connect(g);
-    if (pan != null && this.ctx.createStereoPanner) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node = node.connect(p); }
+    let node = g;
+    if (lp) {
+      const [a, b, secs = end - t, q = 0.7] = lp, f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.Q.value = q;
+      if (a === b) f.frequency.value = a;
+      else { f.frequency.setValueAtTime(a, t); f.frequency.exponentialRampToValueAtTime(Math.max(30, b), t + Math.max(0.01, secs)); }
+      node = node.connect(f);
+    }
+    if (pan != null && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = pan; node = node.connect(p); }
     node.connect(out);
-    o.start(t); o.stop(end + 0.02);
+    for (const o of oscs) { o.start(t); o.stop(end + 0.02); }
     if (this.voice) this.voiceEnd = Math.max(this.voiceEnd, end + 0.02);
   }
   noise(t, { dur = 0.2, vol = 0.3, f0 = 2000, f1 = f0, q = 1, type = 'bandpass', out = this.voice ?? this.sfxBus } = {}) {
