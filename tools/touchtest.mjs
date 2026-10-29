@@ -1,4 +1,4 @@
-// Touch-device check: node tools/touchtest.mjs
+// Touch-device check: node tools/touchtest.mjs   (BASE=<url> to test a deployed site)
 // Emulates phones/tablets with real touch events, drives the left stick and the SLASH
 // button, and screenshots each layout to tools/out/touch-<device>.png.
 import { launch } from './browser.mjs';
@@ -11,7 +11,8 @@ const DEVICES = {
   'ipad-portrait': { width: 820, height: 1180, scale: 2 },
   'duo-unfolded': { width: 1114, height: 705, scale: 2.5 },
 };
-const { url, close } = await startServer();
+// BASE=https://gaming.bobbby.online tests the deployed site instead of a local server.
+const { url, close } = process.env.BASE ? { url: process.env.BASE, close: () => {} } : await startServer();
 const browser = await launch();
 let failed = 0;
 for (const [name, d] of Object.entries(DEVICES)) {
