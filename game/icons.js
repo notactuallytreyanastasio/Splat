@@ -129,6 +129,37 @@ const DRAW = {
     `<path d="M13 56L13 29C13 15 21 7 32 7C43 7 51 15 51 29L51 56L45 50L38.5 56L32 50L25.5 56L19 50Z" fill="#f4efff"/>
      <ellipse cx="25" cy="29" rx="3.5" ry="5" fill="${INK}" stroke-width="1"/><ellipse cx="39" cy="29" rx="3.5" ry="5" fill="${INK}" stroke-width="1"/>
      <ellipse cx="32" cy="41" rx="3" ry="3.5" fill="${C.pink}" stroke-width="3"/>`,
+
+  // The pause menu. Two fat candy bars, slightly out of step.
+  pause: () =>
+    `<rect x="13" y="10" width="14" height="44" rx="6" fill="${C.pink}" transform="rotate(-4 20 32)"/>
+     <rect x="37" y="10" width="14" height="44" rx="6" fill="${C.lilac}" transform="rotate(3 44 32)"/>` +
+    shine('M17 17L17 27', 3) + shine('M41 17L41 25', 3),
+  play: () =>
+    `<path d="M17 9Q14 9 14 13L14 51Q14 55 18 53L53 35Q57 32 53 29L18 10Q17.5 9 17 9Z" fill="${C.mint}"/>` +
+    shine('M20 18L20 30', 3.5),
+  restart: () =>
+    `<path d="M50 34A18 18 0 1 1 41 17" stroke-width="13"/><path d="M50 34A18 18 0 1 1 41 17" stroke="${C.lemon}" stroke-width="5"/>
+     <path d="M35 6L52 13L40 27Z" fill="${C.hot}"/>`,
+  // Home is the garden gate: a little picket arch.
+  home: () =>
+    `<path d="M10 56L10 30Q10 12 32 12Q54 12 54 30L54 56Z" fill="${C.mint}"/>
+     <path d="M20 56L20 32Q20 23 32 23Q44 23 44 32L44 56Z" fill="${C.cream}"/>
+     <path d="M32 23L32 56M20 40L44 40" stroke-width="3.5"/>
+     <circle cx="38" cy="47" r="2.2" fill="${INK}" stroke-width="1.5"/>
+     <circle cx="32" cy="9" r="5" fill="${C.pink}" stroke-width="3.5"/>`,
+  shake: () =>
+    `<rect x="18" y="16" width="28" height="32" rx="7" fill="${C.peach}" transform="rotate(-8 32 32)"/>
+     <path d="M25 27L29 29M36 26L40 28" stroke-width="3.5"/><path d="M26 39Q32 35 38 39" stroke-width="3.5"/>
+     <path d="M9 20Q5 26 9 32Q5 38 9 44M55 20Q59 26 55 32Q59 38 55 44" stroke-width="4"/>`,
+  eye: () =>
+    `<path d="M4 33Q32 6 60 33Q32 58 4 33Z" fill="${C.cream}"/>
+     <circle cx="32" cy="33" r="12" fill="${C.sky}"/><circle cx="32" cy="33" r="5" fill="${INK}" stroke-width="1"/>
+     <path d="M15 14L12 7M32 10L32 3M49 14L52 7" stroke-width="4"/>` + shine('M27 28L29 26.5', 3),
+  zoom: () =>
+    `<path d="M40 40L56 56" stroke-width="12"/><path d="M40 40L56 56" stroke="${C.lilac}" stroke-width="5"/>
+     <circle cx="27" cy="27" r="18" fill="#eaf6ff"/><circle cx="27" cy="27" r="11" fill="${C.pink}" stroke-width="3"/>` +
+    shine('M18 22Q20 17 25 16', 3),
 };
 
 const CACHE = {};

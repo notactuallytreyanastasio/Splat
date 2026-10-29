@@ -14,7 +14,7 @@
 //   duck    [depth 0..1, hold s, release s]: pull the music down under this sound
 export class Sfx {
   constructor() {
-    this.recipes = {}; this.mix = {}; this.ctx = null; this.volume = 0.5; this.last = {};
+    this.recipes = {}; this.mix = {}; this.ctx = null; this.volume = 0.5; this.level = 1; this.last = {};
     this.voices = {}; this.groups = {}; this.offline = false;
   }
   unlock() {
@@ -40,6 +40,7 @@ export class Sfx {
     this.out = ctx.createGain(); this.out.gain.value = 0.84;
     this.master.connect(glue).connect(lim).connect(this.out).connect(ctx.destination);
     this.sfxBus = ctx.createGain();
+    this.sfxBus.gain.value = this.level; // the sound-volume setting (pause menu)
     this.sfxBus.connect(this.master);
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = 0.55; // garden in a fight at about -30 dBFS short-term, 9 dB under a hit
@@ -50,6 +51,7 @@ export class Sfx {
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
+  setLevel(v) { this.level = v; if (this.sfxBus) this.sfxBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
   define(name, fn, mix) { this.recipes[name] = fn; if (mix) this.mix[name] = mix; }
   // `at` is only for offline rendering; the game always plays now.
   play(name, opts = {}, at) {

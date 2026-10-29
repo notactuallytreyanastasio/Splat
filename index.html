@@ -424,6 +424,103 @@
   @media (max-height: 460px) { .tut-text p { font-size: 13px; line-height: 1.45; } .tut-text h3 { font-size: 18px; } .tut-text .kicker { display: none; } .tut .chip { height: 24px; } .tut kbd { line-height: 16px; }
     .tut-card { grid-template-columns: 44px 1fr auto; gap: 10px; padding: 8px 16px 16px 10px; } .tut-icon { width: 44px; height: 44px; } .tut-icon svg { width: 32px; height: 32px; } .tut-count b { font-size: 28px; } .tut-count { font-size: 20px; }
     .tut-modal .sheet { padding: 40px 20px 16px; } .tut-modal p { font-size: 15px; margin: 4px auto 10px; } .tut-modal .lessons { margin-bottom: 10px; } .tut-modal .lessons i { width: 36px; height: 36px; } .tut-modal .lessons svg { width: 24px; height: 24px; } .tut-modal h1 { font-size: 34px; } }
+  /* Pause: a drawn button beside the sound one (under the health orb on touch, clear of
+     the thumbs, the sound button and the boss bar), and a card over a dimmed frozen frame. */
+  .pausebtn { display: none; position: absolute; top: 8px; right: 56px; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 4px solid var(--ink); background: #fff;
+    box-shadow: 0 3px 0 var(--ink); pointer-events: auto; cursor: pointer; z-index: 6; touch-action: manipulation; }
+  body.playing .pausebtn { display: block; }
+  body.paused .pausebtn { visibility: hidden; }
+  .pausebtn .ic { width: 22px; height: 22px; margin: auto; stroke-width: 7; }
+  .pausebtn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  body.touching .pausebtn { width: 44px; height: 44px; right: auto; top: calc(env(safe-area-inset-top) + 16px + clamp(54px, 11vmin, 90px)); left: calc(env(safe-area-inset-left) + 8px + (clamp(54px, 11vmin, 90px) - 44px) / 2); }
+  body.touching .pausebtn .ic { width: 25px; height: 25px; }
+  body.touching .roster { top: calc(env(safe-area-inset-top) + 68px + clamp(54px, 11vmin, 90px)); }
+  /* On a narrow phone the button sits where the boss bar's left end and the lesson card's
+     corner (and its skip chip) used to be: shorten the bar, drop the card below the button. */
+  body.touching .boss { width: min(640px, 70vw, calc(100vw - 2 * (env(safe-area-inset-left) + 64px))); }
+  @media (orientation: portrait) and (max-width: 680px) { body.touching .tut { top: calc(env(safe-area-inset-top) + 76px + clamp(54px, 11vmin, 90px)); } }
+  body.paused .touch, body.paused .tut, body.paused .cue { visibility: hidden; }
+  /* The flashing setting scales every full-screen flash; the parry ring stays, it is a cue.
+     Only when turned down: a filter on four full-screen layers is not free at full. */
+  body.calmfx #hud .flash, body.calmfx #hud .edge, body.calmfx #hud .vignette, body.calmfx #hud .lowhp { filter: opacity(var(--fk, 1)); }
+  .pause { position: absolute; inset: 0; z-index: 8; display: none; place-items: center; overflow-y: auto; overscroll-behavior: contain;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); pointer-events: auto; touch-action: pan-y;
+    background: radial-gradient(circle, rgba(58,35,70,.22), rgba(58,35,70,.5)); backdrop-filter: blur(1.5px) saturate(.6); -webkit-backdrop-filter: blur(1.5px) saturate(.6); }
+  .pause.on { display: grid; animation: fadein .16s ease-out; }
+  .pause * { touch-action: manipulation; }
+  .pause .sheet { position: relative; width: min(720px, 100%); margin: auto; padding: 18px 22px 14px; background: var(--cream); border: 6px solid var(--ink); border-radius: 30px;
+    box-shadow: 0 10px 0 var(--ink); text-align: center; animation: tutin .45s cubic-bezier(.2, 1.5, .4, 1) both;
+    background-image: radial-gradient(rgba(255,158,203,.22) 2px, transparent 2.5px); background-size: 16px 16px; }
+  .pause .badge { position: absolute; left: 22px; top: -26px; width: 64px; height: 64px; border-radius: 50%; background: #ffe3ee; border: 5px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
+    display: grid; place-items: center; transform: rotate(-10deg); animation: tutwob .7s .1s both; }
+  .pause .badge .ic { width: 40px; height: 40px; }
+  .pause h1 { margin: 0; font-size: clamp(40px, 8vw, 60px); line-height: 1; color: #fff; -webkit-text-stroke: 9px var(--ink); paint-order: stroke fill; letter-spacing: 3px; transform: rotate(-2deg); }
+  .pause .sub { margin: 6px auto 14px; max-width: 460px; font-size: 17px; font-weight: 500; }
+  .pause .sub b { color: var(--pink); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; font-size: 1.08em; }
+  .pause .cols { display: grid; grid-template-columns: minmax(200px, 250px) 1fr; gap: 20px; align-items: start; text-align: left; }
+  .pause .acts { display: grid; gap: 12px; }
+  .pause .acts button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 6px 16px 6px 10px; font: 700 20px Fredoka, system-ui; color: var(--ink);
+    background: #fff; border: 5px solid var(--ink); border-radius: 18px; box-shadow: 0 6px 0 var(--ink); cursor: pointer; text-align: left; transition: transform .12s cubic-bezier(.3, 1.8, .5, 1); }
+  .pause .acts button svg { width: 30px; height: 30px; flex: none; stroke-width: 5.5; }
+  .pause .acts button:nth-child(2) { background: #fffbe0; } .pause .acts button:nth-child(3) { background: #f1ebff; } .pause .acts button:nth-child(4) { background: #dcfaec; }
+  .pause .acts .go { color: #fff; background: var(--pink) !important; font-size: 23px; }
+  .pause .acts .go span { -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  .pause .acts button:hover { transform: translateY(-2px) rotate(-1deg); }
+  .pause .acts button:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); transition-duration: .04s; }
+  .pause .settings { background: #fff; border: 4px solid var(--ink); border-radius: 22px; padding: 8px 16px 10px; box-shadow: 0 5px 0 var(--ink); }
+  .pause .settings h2 { margin: 0 0 2px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--pink); }
+  .pause .row { display: grid; grid-template-columns: 9.5em 1fr; align-items: center; gap: 10px; min-height: 44px; font-size: 16px; font-weight: 700; }
+  .pause label.row { grid-template-columns: 9.5em 1fr 2.2em; }
+  .pause .row + .row { border-top: 3px dotted rgba(58,35,70,.2); }
+  .pause .lbl { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .pause .lbl svg { width: 26px; height: 26px; flex: none; stroke-width: 6; }
+  .pause output { text-align: right; font-size: 15px; color: var(--ink); opacity: .8; font-variant-numeric: tabular-nums; }
+  .pause input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 0; background: none; cursor: pointer; }
+  .pause input[type=range]::-webkit-slider-runnable-track { height: 14px; border: 3px solid var(--ink); border-radius: 9px; background: linear-gradient(90deg, #ff9ecb, #ff5fa2 var(--p, 50%), #f3eaf6 var(--p, 50%)); }
+  .pause input[type=range]::-moz-range-track { height: 8px; border: 3px solid var(--ink); border-radius: 9px; background: linear-gradient(90deg, #ff9ecb, #ff5fa2 var(--p, 50%), #f3eaf6 var(--p, 50%)); }
+  .pause input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -9px; border-radius: 50%; background: var(--lemon); border: 4px solid var(--ink); box-shadow: 0 3px 0 var(--ink); }
+  .pause input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--lemon); border: 4px solid var(--ink); box-shadow: 0 3px 0 var(--ink); }
+  .pause .seg { display: inline-flex; justify-self: start; border: 3px solid var(--ink); border-radius: 13px; overflow: hidden; background: #fff; box-shadow: 0 3px 0 var(--ink); }
+  .pause .seg button { min-width: 54px; min-height: 34px; padding: 0 10px; font: 700 15px Fredoka, system-ui; color: var(--ink); background: #fff; border: 0; cursor: pointer; }
+  .pause .seg button + button { border-left: 3px solid var(--ink); }
+  .pause .seg button.on { background: var(--mint); }
+  .pause .seg[data-k=flash] button.on { background: var(--lemon); } .pause .seg[data-k=zoom] button.on { background: #a6dcff; }
+  .pause button:focus { outline: none; }
+  .pause button:focus-visible, .pause input:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--lemon), 0 0 0 7px var(--ink); }
+  .pause .seg button:focus-visible { box-shadow: inset 0 0 0 4px var(--pink); }
+  .pause .hint { display: block; margin-top: 12px; font-size: 14px; font-weight: 700; opacity: .55; }
+  @media (max-width: 620px) {
+    .pause .cols { grid-template-columns: 1fr; gap: 14px; }
+    .pause .acts { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pause .acts .go, .pause .acts button:last-child:nth-child(even) { grid-column: 1 / -1; }
+    .pause .acts button { font-size: 16px; min-height: 46px; padding: 4px 8px; gap: 6px; }
+    .pause .acts button svg { width: 24px; height: 24px; }
+    .pause .row, .pause label.row { grid-template-columns: 1fr auto; gap: 4px 10px; }
+    .pause label.row { grid-template-columns: auto 1fr 2em; }
+    .pause .row { font-size: 14px; } .pause .lbl svg { width: 22px; height: 22px; }
+    .pause .seg button { min-width: 46px; padding: 0 7px; font-size: 14px; }
+    .pause .sheet { padding: 16px 14px 12px; }
+    .pause .badge { width: 52px; height: 52px; top: -20px; left: 14px; } .pause .badge .ic { width: 32px; height: 32px; }
+  }
+  /* Under ~400px "flashing & noir" plus three choices no longer fit on one line (a 360px
+     Android pushed "calm" 9px out of the card): put each choice group under its label. */
+  @media (max-width: 400px) {
+    .pause div.row { grid-template-columns: 1fr; gap: 4px; padding: 5px 0 8px; }
+    .pause div.row .seg { margin-left: 29px; }
+  }
+  @media (max-height: 480px) {
+    .pause .sheet { padding: 10px 18px 8px; }
+    .pause h1 { font-size: 34px; -webkit-text-stroke: 7px var(--ink); }
+    .pause .sub { margin: 2px auto 8px; font-size: 14px; }
+    .pause .badge { width: 46px; height: 46px; top: -14px; } .pause .badge .ic { width: 28px; height: 28px; }
+    .pause .acts { gap: 8px; } .pause .acts button { min-height: 40px; font-size: 17px; border-width: 4px; box-shadow: 0 4px 0 var(--ink); }
+    .pause .acts .go { font-size: 19px; }
+    .pause .acts button svg { width: 24px; height: 24px; }
+    .pause .row { min-height: 36px; font-size: 14px; } .pause .settings h2 { display: none; } .pause .settings { padding: 4px 14px 6px; }
+    .pause .seg button { min-height: 30px; }
+    .pause .hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pause, .pause * { animation: none !important; } }
 </style>
 </head>
 <body>

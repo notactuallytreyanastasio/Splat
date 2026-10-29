@@ -32,6 +32,8 @@ import { Telemetry } from './telemetry.js';
 import { RAINBOW, goreChunk } from './models.js';
 import { Coop, TINTS } from './coop.js';
 import { Tutorial } from './tutorial.js';
+import { Pause } from './pause.js';
+import { quickStart } from './settings.js';
 
 const STREAKS = { 2: 'Double Tap!', 3: 'Triple Treat!', 4: 'Bug Splat Party!', 5: 'Petal Massacre!', 7: 'RAINBOW CARNAGE!', 10: 'EXTERMINATRIX!!', 15: 'APOCALYPSE PICNIC!!!' };
 const ROOM_NAMES = ['the Petal Foyer', 'the Mushroom Court', 'the Beetle Den', "the Empress's Bower"];
@@ -105,6 +107,7 @@ export class Game {
     this.coop = this.net ? new Coop(this, this.net) : null;
     this.bot = opts.bot ? new Bot(this, opts.botskill ?? 1) : null;
     this.tutorial = opts.tutorial && !this.net ? new Tutorial(this, levelJson) : null;
+    this.pause = new Pause(this);
     this.intent = emptyIntent();
     if (opts.start != null && !this.guest) this.skipToRoom(+opts.start);
     // ?boons=sticky,ricochet starts the run with those boons (testing and screenshots).
@@ -115,6 +118,7 @@ export class Game {
     this.loop.start();
     this.started = !!opts.bot;
     if (this.started) this.begin();
+    else if (!this.net && !this.tutorial && quickStart()) { this.started = true; this.begin(); } // "restart run" from the pause menu
     else if (this.tutorial) this.tutorial.intro(() => { this.sfx.unlock(); this.started = true; this.begin(); });
     else this.hud.title(() => { this.sfx.unlock(); this.started = true; this.begin(); }, this.net);
   }
@@ -131,6 +135,7 @@ export class Game {
   }
   applyAudioMode() {
     this.sfx.unlock();
+    // main is the final output (music and effects); the sound-volume setting lives on master.
     if (this.sfx.master) this.sfx.master.gain.value = this.audioMode === 'off' ? 0 : this.sfx.volume;
     if (this.audioMode === 'all') this.music.play('garden'); else this.music.stop();
     this.hud.audioIcon?.(this.audioMode);
@@ -1240,6 +1245,8 @@ export class Game {
     if (frozen || !this.started) { if (this.coop && this.started) this.coop.update(dt); this.input.endStep(); this.touch.endStep(); return; }
     this.time += dt;
     this.intent = this.bot ? this.bot.think(dt) : this.humanIntent();
+    // Co-op keeps running under the menu: the knight stands still and keeps its aim.
+    if (this.pause.isOpen) this.intent = { ...emptyIntent(), aimX: this.intent.aimX, aimZ: this.intent.aimZ };
     this.updateLock(this.intent);
     this.aimAtLock(this.intent);
     this.player.intent = this.intent;
@@ -1324,8 +1331,11 @@ export class Game {
     const sat = 1 - Math.min(1, this.heat) * 0.8;
     if (this.heat >= 1.1) this.noirOn = true; else if (this.heat < 0.7) this.noirOn = false;
     const noir = this.state === 'play' && !p.ghost && (this.noirOn || p.state === 'whirl') ? 1 : 0;
+    // The flashing setting caps how far into noir the world goes and how fast it snaps
+    // there (full 1 at 6/s, soft .55 at ~3.3/s, calm .2 at ~1.2/s): the snap is the flash.
+    const fk = this.flashScale ?? 1;
     g.sat += (sat - g.sat) * Math.min(1, dt * (sat > g.sat ? 3 : 2));
-    g.noir += (noir - g.noir) * Math.min(1, dt * (noir ? 6 : 2.5));
+    g.noir += (noir * fk - g.noir) * Math.min(1, dt * (noir ? 6 * fk : 2.5));
     if (this.state === 'play') { this.telemetry.c.noirTime = (this.telemetry.c.noirTime ?? 0) + (g.noir > 0.5 ? dt : 0); this.telemetry.c.satSum = (this.telemetry.c.satSum ?? 0) + g.sat * dt; }
     if (noir && !this.wasNoir) { this.sfx.play('noir'); this.view.kick(0.03); }
     this.wasNoir = noir;
@@ -1362,7 +1372,9 @@ export class Game {
     else this.loop.timeScale += (1 - this.loop.timeScale) * Math.min(1, dt * 4);
     // A ghost watches a living friend.
     const p = this.player.ghost ? (this.players.find(k => !k.ghost) ?? this.player) : this.player;
+    this.pause.poll();
     this.updateGrade(dt);
+    if (this.loop.paused) this.music.setTone(650); // the band, heard through a wall
     this.fadeOccluders(dt, p);
     // camBias (world units, up-screen) lets the tutorial frame the knight below its card.
     const bias = this.tutorial?.camBias ?? 0;
