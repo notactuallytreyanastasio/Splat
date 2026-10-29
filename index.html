@@ -52,10 +52,10 @@
   .orb.rage.full.ding { animation: ding .5s ease-out, throb .5s .5s infinite alternate; }
   @keyframes ding { 0% { transform: scale(1.35); box-shadow: 0 6px 0 var(--ink), 0 0 0 10px #fff, 0 0 50px 24px #fff1a1; } 100% { transform: scale(1); } }
   /* Low health and crits: a soft pink heartbeat and a thin lemon flash at the screen edge. */
-  .lowhp { position: absolute; inset: 0; opacity: 0; transition: opacity .6s; background: radial-gradient(ellipse at center, transparent 62%, rgba(255,95,162,.38) 100%); }
+  .lowhp { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .6s; background: radial-gradient(ellipse at center, transparent 62%, rgba(255,95,162,.38) 100%); }
   .lowhp.on { opacity: .3; } .lowhp.on.beat { animation: beat .55s ease-out; }
   @keyframes beat { 0% { opacity: .3; } 14% { opacity: .8; } 32% { opacity: .45; } 46% { opacity: .7; } 100% { opacity: .3; } }
-  .edge { position: absolute; inset: 0; opacity: 0; box-shadow: inset 0 0 0 5px rgba(255,241,161,.95), inset 0 0 28px 6px rgba(255,255,255,.6); }
+  .edge { position: absolute; inset: 0; z-index: -1; opacity: 0; box-shadow: inset 0 0 0 5px rgba(255,241,161,.95), inset 0 0 28px 6px rgba(255,255,255,.6); }
   .edge.on { animation: edge .22s ease-out; } @keyframes edge { 0% { opacity: 1; } 100% { opacity: 0; } }
   .xp { position: absolute; left: 160px; right: 160px; bottom: 26px; height: 18px; border: 4px solid var(--ink); border-radius: 12px; background: #fff6fb; overflow: hidden; }
   .xp .fill { height: 100%; background: linear-gradient(90deg, var(--mint), #a6dcff); transition: width .2s; }
@@ -64,10 +64,10 @@
   .gems { position: absolute; right: 152px; bottom: 54px; font-size: 22px; font-weight: 700; color: var(--lemon); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
   .streak { position: absolute; right: 30px; top: 90px; text-align: right; opacity: 0; transition: opacity .3s; }
   .streak.on { opacity: 1; } .streak.pop { animation: pop .3s; }
-  .streak { isolation: isolate; transform-origin: 80% 50%; }
+  .streak { isolation: isolate; transform-origin: 100% 50%; }
   .streak .burst { position: absolute; right: -10px; top: -46px; width: 150px; z-index: -1; opacity: 0; pointer-events: none; }
   .streak.mile { animation: milepop .6s ease-out; } .streak.mile .burst { animation: burst .75s ease-out; } .streak.mile b { animation: milecolor .6s steps(1) 2; }
-  @keyframes milepop { 0% { transform: scale(2.6) rotate(-14deg); } 25% { transform: scale(.82) rotate(7deg); } 45% { transform: scale(1.16) rotate(-4deg); } 70% { transform: scale(.97) rotate(1deg); } 100% { transform: none; } }
+  @keyframes milepop { 0% { transform: scale(1.9) rotate(-10deg); } 25% { transform: scale(.82) rotate(7deg); } 45% { transform: scale(1.16) rotate(-4deg); } 70% { transform: scale(.97) rotate(1deg); } 100% { transform: none; } }
   @keyframes burst { 0% { opacity: 1; transform: scale(.2) rotate(0); } 35% { opacity: 1; transform: scale(1.1) rotate(25deg); } 100% { opacity: 0; transform: scale(1.35) rotate(45deg); } }
   @keyframes milecolor { 0% { color: #fff; } 50% { color: var(--lemon); } }
   .streak b { display: block; font-size: 40px; color: var(--pink); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }

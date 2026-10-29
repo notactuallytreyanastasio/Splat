@@ -123,8 +123,9 @@ export class Hud {
     if (n > 1) {
       this.$('.streak b').textContent = n + ' KILLS';
       if (title) this.$('.streak i').textContent = title;
-      // Milestones (the named ones) get a starburst and a much bigger slam than a plain +1.
-      s.classList.remove('pop', 'mile'); void s.offsetWidth; s.classList.add(title ? 'mile' : 'pop');
+      // The big milestones (5, 7, 10, 15) get a starburst and a much bigger slam. 2 to 4 are
+      // named too, but they land on nearly every multi-kill, and a slam every kill is noise.
+      s.classList.remove('pop', 'mile'); void s.offsetWidth; s.classList.add(title && n >= 5 ? 'mile' : 'pop');
     } else this.$('.streak i').textContent = '';
   }
   title(onStart, net) {
