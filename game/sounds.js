@@ -30,6 +30,9 @@ export function defineSounds(s) {
   s.define('roar', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 160, f1: 60, dur: 1.0, vol: 0.25 }); s.noise(t, { dur: 0.9, vol: 0.3, f0: 800, f1: 100, type: 'lowpass' }); });
   s.define('summon', (s, t) => [880, 660, 990].forEach((f, i) => s.tone(t + i * 0.1, { type: 'triangle', f0: f, dur: 0.15, vol: 0.1 })));
   s.define('parry', (s, t) => { s.tone(t, { type: 'triangle', f0: 1568, dur: 0.5, vol: 0.22 }); s.tone(t, { type: 'sine', f0: 2349, dur: 0.35, vol: 0.12 }); s.tone(t + 0.04, { type: 'sine', f0: 3136, dur: 0.25, vol: 0.06 }); });
+  // Lub-dub: two soft sub thumps, quiet enough to sit under the fight.
+  s.define('heartbeat', (s, t, o) => { s.tone(t, { type: 'sine', f0: 72, f1: 44, dur: 0.16, vol: 0.32 * (o.vol ?? 1) }); s.tone(t + 0.17, { type: 'sine', f0: 62, f1: 40, dur: 0.2, vol: 0.22 * (o.vol ?? 1) }); });
   s.define('bloom', (s, t, o) => { s.tone(t, { type: 'sine', f0: 380 * P(o), f1: 1150 * P(o), dur: 0.16, vol: 0.14 }); s.noise(t, { dur: 0.12, vol: 0.14, f0: 2500, f1: 900 }); });
+  s.define('ragefull', (s, t) => [1046, 1318, 1568, 2093].forEach((f, i) => s.tone(t + i * 0.045, { type: 'triangle', f0: f, dur: 0.22, vol: 0.09 })));
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
 }

@@ -390,6 +390,7 @@ export class Game {
     if (mine) this.loop.freeze(d.kind === 'whirl' ? 0.012 : big ? 0.1 : d.c ? 0.085 : d.kind === 'impact' ? 0.06 : 0.045);
     this.view.shake((big ? 0.35 : d.c ? 0.28 : d.kind === 'whirl' ? 0.05 : 0.14) * (mine ? 1 : 0.35));
     if ((big || d.c) && mine) this.view.kick(0.03);
+    if (d.c && mine) this.hud.crit();
     this.sfx.play('hit', { pitch: d.kind === 'heavy' ? 0.6 : d.c ? 1.3 : 0.9 + Math.random() * 0.3 });
     this.floaters.spawn(d.c ? d.a + '!' : '' + d.a, t.x, (t.rig?.height ?? 1) + 0.4, t.z, { cls: d.c ? 'crit' : d.kind === 'impact' ? 'impact' : mine ? '' : 'ally', scale: Math.min(2, 0.8 + d.a / 40) });
     if (d.src === this.localId && this.guest) { this.telemetry.c.hits++; this.telemetry.c.dealt += d.a; }
