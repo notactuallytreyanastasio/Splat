@@ -101,8 +101,18 @@ export class Hud {
     const t = this.$('.title');
     t.classList.add('on');
     if (net) {
-      const link = `${location.origin}${location.pathname}?coop=${net.room}`;
-      t.querySelector('.modes').innerHTML = `<p class="room">co-op room <b>${net.room}</b> · you are <b>${net.name}</b> · ${net.isHost ? 'you host' : 'joined'}</p><p class="share">send this: <code>${link}</code></p>`;
+      const link = `${location.origin}${location.pathname.replace(/index\.html$/, '')}?coop=${net.room}`;
+      t.querySelector('.modes').innerHTML = `<p class="room">co-op room <b>${net.room}</b> · you are <b>${net.name}</b> · ${net.isHost ? 'you host' : 'joined'}</p><p class="share">send this: <button class="copy" type="button"><code>${link}</code><span>tap to copy</span></button></p>`;
+      const copy = t.querySelector('.copy');
+      copy.onclick = async e => {
+        e.stopPropagation();
+        let ok = false;
+        try { if (navigator.share && this.g.view.coarse) { await navigator.share({ title: 'Pastel Garden Massacre', text: 'come squish bugs with me', url: link }); ok = true; } } catch {}
+        if (!ok) try { await navigator.clipboard.writeText(link); ok = true; } catch {}
+        if (!ok) { const r = document.createRange(); r.selectNodeContents(copy.querySelector('code')); getSelection().removeAllRanges(); getSelection().addRange(r); ok = document.execCommand?.('copy'); }
+        copy.querySelector('span').textContent = ok ? 'copied!' : 'long-press to copy';
+        setTimeout(() => { copy.querySelector('span').textContent = 'tap to copy'; }, 1800);
+      };
       t.querySelector('button').textContent = net.isHost ? 'start the massacre' : 'jump in';
     } else {
       // Co-op stays hidden until its server channel is live (?beta shows it).

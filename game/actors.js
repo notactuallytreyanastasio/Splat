@@ -5,6 +5,7 @@ import { Entity } from '../engine/world/world.js';
 import { fx } from '../engine/core/rng.js';
 import * as M from './models.js';
 import { emptyIntent } from '../engine/core/input.js';
+import { bakeRig } from '../engine/render/bake.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -45,6 +46,7 @@ export class Creature extends Entity {
     this.carried = null;
     this.wounds = 0;
     this.groundFriction = 10;
+    bakeRig(rig.root, rig.kit);
     game.scene.add(rig.root);
   }
   get airborne() { return this.y > 0.02 || this.vy > 0; }
@@ -182,6 +184,7 @@ export class Player extends Creature {
   rebuild() {
     if (this.rig.root.parent) this.rig.root.parent.remove(this.rig.root);
     this.rig = M.knight(this.tint);
+    bakeRig(this.rig.root, this.rig.kit);
     this.game.scene.add(this.rig.root);
     this.addRing();
     this.wounds = 0; this.state = 'move'; this.holding = null;

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { IsoView } from '../engine/render/view.js';
 import { makeLights } from '../engine/render/toon.js';
 import * as M from '../game/models.js';
+import { bakeRig } from '../engine/render/bake.js';
 
 const view = new IsoView(document.body, { distance: 14, pitch: 30 });
 const lights = makeLights(view.scene);
@@ -15,6 +16,7 @@ lights.follow(0, 0);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshToonMaterial({ color: 0xfff6fb }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; view.scene.add(floor);
 const models = [M.knight(), M.ladybug(), M.caterpillar(), M.butterfly(), M.beetle(), M.mantis()];
+models.forEach(m => bakeRig(m.root, m.kit));
 models.forEach((m, i) => { m.root.position.set((i - 2.5) * 2.2 * 0.7, 0, -(i - 2.5) * 2.2 * 0.7); view.scene.add(m.root); });
 const extra = ['meat', 'leg', 'eye', 'heart', 'gut', 'wing', 'goo'].map((k, i) => { const g = M.goreChunk(k); g.position.set(2 + i * 0.5, 0.2, 2 - i * 0.1); view.scene.add(g); return g; });
 view.snap(0, 0);
