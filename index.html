@@ -88,6 +88,20 @@
   @keyframes milepop { 0% { transform: scale(1.9) rotate(-10deg); } 25% { transform: scale(.82) rotate(7deg); } 45% { transform: scale(1.16) rotate(-4deg); } 70% { transform: scale(.97) rotate(1deg); } 100% { transform: none; } }
   @keyframes burst { 0% { opacity: 1; transform: scale(.2) rotate(0); } 35% { opacity: 1; transform: scale(1.1) rotate(25deg); } 100% { opacity: 0; transform: scale(1.35) rotate(45deg); } }
   @keyframes milecolor { 0% { color: #fff; } 50% { color: var(--lemon); } }
+  /* The hit counter sits under the kill streak, left of it, slanted like a brush stroke. */
+  .hits { position: absolute; right: 30px; top: 190px; text-align: right; opacity: 0; transition: opacity .25s; transform: skewX(-10deg); transform-origin: 100% 50%; }
+  .hits.on { opacity: 1; }
+  .hits b { font-size: 46px; color: var(--lemon); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; display: inline-block; }
+  .hits span { font-size: 20px; margin-left: 6px; color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .hits i { display: block; font-style: normal; font-size: 22px; color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; letter-spacing: 2px; }
+  .hits em { display: block; font-style: normal; font-size: 14px; color: #fff; -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  .hits.hit b { animation: hitpunch .16s ease-out; }
+  .hits.rank i { animation: milepop .5s ease-out; }
+  .hits.broke { opacity: 1; animation: hitbreak .5s ease-in forwards; }
+  @keyframes hitpunch { 0% { transform: scale(1.45) rotate(-6deg); } 100% { transform: none; } }
+  @keyframes hitbreak { 0% { transform: skewX(-10deg); filter: none; } 30% { transform: skewX(-10deg) translateX(-8px) rotate(-4deg); filter: grayscale(1); } 100% { transform: skewX(-10deg) translateY(30px) rotate(8deg); opacity: 0; filter: grayscale(1); } }
+  body.paused .hits { visibility: hidden; }
+  body.touching .hits { top: calc(env(safe-area-inset-top) + 150px); }
   .streak b { display: block; font-size: 40px; color: var(--pink); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }
   .streak i { display: block; font-style: normal; font-size: 26px; color: var(--lemon); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
   @keyframes pop { 0% { transform: scale(1.6) rotate(-6deg); } 100% { transform: scale(1); } }

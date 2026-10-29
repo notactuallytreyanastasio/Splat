@@ -2,7 +2,7 @@
 <html><head><meta charset="utf-8"><title>Model Lineup</title>
 <style>body{margin:0;overflow:hidden;font:14px system-ui;background:#ffe9f6}#ui{position:fixed;top:8px;left:8px;background:#fffc;padding:8px 12px;border-radius:10px;border:3px solid #3a2346}</style>
 <script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
-</head><body><div id="ui">Model lineup: <b id="act">idle</b> &middot; keys: 1 idle, 2 walk, 3 windup, 4 attack, 5 light, 6 heavy, 7 whirl, space spin</div>
+</head><body><div id="ui">Model lineup: <b id="act">idle</b> &middot; keys: 1 idle, 2 walk, 3 windup, 4 attack, 5 slash, 6 heavy, 7 whirl, space spin; ?action=spin&p=0.4 freezes any move</div>
 <script type="module">
 import * as THREE from 'three';
 import { IsoView } from '../engine/render/view.js';
@@ -10,19 +10,27 @@ import { makeLights } from '../engine/render/toon.js';
 import * as M from '../game/models.js';
 import { bakeRig } from '../engine/render/bake.js';
 
-const view = new IsoView(document.body, { distance: 14, pitch: 30 });
+const q = new URLSearchParams(location.search);
+const view = new IsoView(document.body, { distance: +(q.get('d') ?? 14), pitch: 30 });
 const lights = makeLights(view.scene);
 lights.follow(0, 0);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshToonMaterial({ color: 0xfff6fb }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; view.scene.add(floor);
 const models = [M.knight(), M.ladybug(), M.caterpillar(), M.butterfly(), M.beetle(), M.mantis()];
 models.forEach(m => bakeRig(m.root, m.kit));
-models.forEach((m, i) => { m.root.position.set((i - 2.5) * 2.2 * 0.7, 0, -(i - 2.5) * 2.2 * 0.7); view.scene.add(m.root); });
-const extra = ['meat', 'leg', 'eye', 'heart', 'gut', 'wing', 'goo'].map((k, i) => { const g = M.goreChunk(k); g.position.set(2 + i * 0.5, 0.2, 2 - i * 0.1); view.scene.add(g); return g; });
+// ?only=0 shows one model alone at the center (0 is the knight), with ?yaw=radians.
+const only = q.has('only') ? +q.get('only') : null;
+models.forEach((m, i) => {
+  if (only != null && i !== only) return;
+  if (only == null) m.root.position.set((i - 2.5) * 2.2 * 0.7, 0, -(i - 2.5) * 2.2 * 0.7);
+  m.root.rotation.y = +(q.get('yaw') ?? 0);
+  view.scene.add(m.root);
+});
+const extra = only != null ? [] : ['meat', 'leg', 'eye', 'heart', 'gut', 'wing', 'goo'].map((k, i) => { const g = M.goreChunk(k); g.position.set(2 + i * 0.5, 0.2, 2 - i * 0.1); view.scene.add(g); return g; });
 view.snap(0, 0);
 const p = new URLSearchParams(location.search);
 let action = p.get('action') || 'idle', spin = p.has('spin'), t = 0;
-const acts = ['idle', 'walk', 'windup', 'attack', 'light', 'heavy', 'whirl'];
+const acts = ['idle', 'walk', 'windup', 'attack', 'slash', 'heavy', 'whirl'];
 addEventListener('keydown', e => { if (e.key >= '1' && e.key <= '7') action = acts[e.key - 1]; if (e.code === 'Space') spin = !spin; });
 let last = performance.now();
 function frame(now) {
@@ -31,8 +39,8 @@ function frame(now) {
   for (const m of models) {
     if (spin) m.root.rotation.y += dt;
     const walk = action === 'walk' ? 1 : 0;
-    const map = { light: 'light', heavy: 'heavy', whirl: 'whirl', windup: 'windup', attack: 'attack' };
-    m.pose(m, { t, phase: t * 10, walk, action: map[action], p: (t % 1), combo: Math.floor(t) % 3, seed: 1 });
+    const pp = p.has('p') ? +p.get('p') : t % 1;
+    m.pose(m, { t, phase: t * 10, walk, action: action === 'idle' || action === 'walk' ? null : action, p: pp, combo: Math.floor(t) % 3, seed: 1 });
   }
   view.update(dt); view.render();
   requestAnimationFrame(frame);

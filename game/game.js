@@ -21,7 +21,7 @@ import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
 import { disposeTree } from '../engine/render/dispose.js';
 import { parseLevel, buildLevelMeshes, bumpMushroom, updateMushrooms } from './level.js';
-import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from './actors.js';
+import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES, MOVES } from './actors.js';
 import { Gore } from './gore.js';
 import { Juice, BUD_HATCH } from './juice.js';
 import { Hud } from './hud.js';
@@ -39,7 +39,9 @@ import { lapMods, lapTheme, shader, loadRun, saveRun, clearRun } from './laps.js
 
 const STREAKS = { 2: 'Double Tap!', 3: 'Triple Treat!', 4: 'Bug Splat Party!', 5: 'Petal Massacre!', 7: 'RAINBOW CARNAGE!', 10: 'EXTERMINATRIX!!', 15: 'APOCALYPSE PICNIC!!!' };
 const ROOM_NAMES = ['the Petal Foyer', 'the Mushroom Court', 'the Beetle Den', "the Empress's Bower"];
-const BIG = { heavy: 1, finisher: 1, wall: 1, scythe: 1 };
+const BIG = { heavy: 1, finisher: 1, wall: 1, scythe: 1, rising: 1, shadow: 1 };
+// The hit counter's ranks (Player.hits; it resets when you are hurt or after 2 s of no hits).
+const RANKS = [[5, 'NICE'], [10, 'SHINOBI'], [20, 'SHADOW DANCER'], [35, 'KAGE'], [50, 'GHOST OF THE GARDEN']];
 
 export class Game {
   constructor(container, levelJson, opts = {}) {
@@ -485,7 +487,7 @@ export class Game {
     this.gore.hit(t, info);
     const big = BIG[d.kind];
     // Hitstop freezes the whole simulation, so in co-op only your own blows stop time.
-    if (mine) this.loop.freeze(d.kind === 'whirl' ? 0.012 : big ? 0.1 : d.c ? 0.085 : d.kind === 'impact' ? 0.06 : 0.045);
+    if (mine) this.loop.freeze(d.kind === 'whirl' ? 0.012 : d.kind === 'shadow' ? 0.13 : big ? 0.1 : d.c ? 0.085 : d.kind === 'impact' ? 0.06 : 0.045);
     this.view.shake((big ? 0.35 : d.c ? 0.28 : d.kind === 'whirl' ? 0.05 : 0.14) * (mine ? 1 : 0.35));
     if ((big || d.c) && mine) this.view.kick(0.03);
     if (d.c && mine) this.hud.crit();
@@ -496,13 +498,16 @@ export class Game {
     if (d.src === this.localId) {
       // The blender cannot refuel itself, and throws/pinballs fill it fastest: rage rewards the core mechanic.
       const p = this.player, rate = d.kind === 'whirl' ? 0 : d.kind === 'impact' || d.kind === 'wall' ? 0.5 : 0.2;
-      p.rage = Math.min(100, p.rage + d.a * rate * p.stats.rageGain);
+      // A long hit counter fills rage up to twice as fast.
+      p.rage = Math.min(100, p.rage + d.a * rate * p.stats.rageGain * (1 + Math.min(1, p.hits / 30)));
+      p.hits++; p.hitsT = 2; this.onHits(p);
       if (p.stats.lifesteal && !p.ghost) p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.lifesteal);
     }
   }
   hurtFx(info) {
     const p = this.player;
     this.hud.hurt();
+    if (p.hits) { p.hits = 0; p.hitsT = 0; this.hud.combo(0, null, true); } // getting hit breaks the counter
     this.view.shake(0.45);
     this.loop.freeze(0.07);
     this.sfx.play('hurt');
@@ -522,7 +527,7 @@ export class Game {
   kill(t, info) {
     t.dead = true;
     if (t.carried) { t.carried.holding = null; t.carried = null; }
-    const overkill = -t.hp > t.maxHp * 0.3 || ['heavy', 'finisher', 'impact', 'wall', 'trample', 'scythe', 'boom', 'land'].includes(info.kind) || t.speed > 9 || t.boss;
+    const overkill = -t.hp > t.maxHp * 0.3 || ['heavy', 'finisher', 'rising', 'shadow', 'fang', 'impact', 'wall', 'trample', 'scythe', 'boom', 'land'].includes(info.kind) || t.speed > 9 || t.boss;
     this.fx('kill', { id: t.nid, dx: r2(info.dirX ?? 0), dz: r2(info.dirZ ?? 0), k: info.knock ?? 4, o: overkill ? 1 : 0, tm: info.team === 'player' ? 1 : 0, ch: t.chain || 0, bw: (info.team === 'player' && (t.lastHitBy ?? this.player).stats.bowling) || undefined });
     if (t.sticky) this.stickyBoom(t); // a bomb killed before it lands still goes off: chain reactions
     this.streak++; this.streakT = 2.6;
@@ -531,6 +536,7 @@ export class Game {
     else if (this.streak > 1) this.fx('st', { n: this.streak });
     this.telemetry.kill(t, info, overkill);
     this.events.emit('kill', { target: t, info, overkill });
+    if (info.team === 'player' && MOVES[info.kind]) this.kageKill();
     const xp = (t.def?.xp ?? 1) * (t.elite ? 3 : 1);
     for (let i = 0; i < xp; i += i < 4 ? 1 : 5) this.world.add(new Gem(this, t.x, t.z, xp - i >= 5 && i >= 4 ? 5 : 1));
     if (Math.random() < (t.elite ? 0.5 : 0.08)) { const o = this.openSpot(t.x + fx.f(-0.5, 0.5), t.z + fx.f(-0.5, 0.5)); this.world.add(new Potion(this, o.x, o.z)); }
@@ -563,6 +569,23 @@ export class Game {
     this.sfx.play('squeak', { pitch: 0.8 + Math.random() * 0.6 });
     if (this.audioMode === 'all') this.killSong.kill(!!d.o);
     if ((t.def?.mass ?? 1) >= 2 || t.elite) this.sfx.duck(0.45, 0.15, 0.5); // a big thing coming apart owns the moment
+  }
+  // Four kills by the blade inside a second is a kage moment: time drags, the screen
+  // drains for a beat, and a brush-stroke banner names the count. Each further kill in
+  // the window raises it. (Bowling and throws have their own reward: the pinball chain.)
+  kageKill() {
+    const now = this.time, k = (this.kage ??= { times: [], shown: 0, cd: 0 });
+    k.times = k.times.filter(t => now - t < 1.0);
+    k.times.push(now);
+    if (k.times.length < 4 || (k.times.length <= k.shown && now - k.cd < 1.0)) return;
+    if (now - k.cd >= 1.0) k.shown = 0;
+    k.shown = k.times.length; k.cd = now;
+    if (!this.net) this.slowmo = Math.max(this.slowmo, 0.55);
+    this.addHeat(0.3);
+    this.fx('bn', { t: `KAGE x${k.shown}`, s: k.shown >= 7 ? 'a hundred cuts' : k.shown >= 5 ? 'one breath, many cuts' : 'clean cut', d: 1.1 });
+    this.fx('sx', { n: 'parry', o: { pitch: 0.7 } });
+    this.fx('sh', { a: 0.2, k: 0.05 });
+    this.telemetry.c.kage = (this.telemetry.c.kage ?? 0) + 1;
   }
   explode(x, z, r, dmg) {
     this.fx('boom', { x, z });
@@ -1094,17 +1117,63 @@ export class Game {
     }
     return t;
   }
-  onSwing(p, kind) { p.swingCount = (p.swingCount ?? 0) + 1; this.slash(p, kind); this.telemetry.swing(); }
+  onSwing(p, kind) {
+    this.telemetry.swing();
+    // Each move has its own whoosh: quick cuts high, the big ones low.
+    const pitch = { slash: 1.15, backhand: 1.25, spin: 0.95, finisher: 0.7, heavy: 0.8, rising: 0.85, shadow: 0.55, fang: 1.4 }[kind] ?? 1;
+    this.sfx.play('swing', { pitch, gap: 0.02 });
+  }
+  onHits(p) {
+    const rank = [...RANKS].reverse().find(([n]) => p.hits >= n);
+    this.hud.combo(p.hits, rank && p.hits === rank[0] ? rank[1] : null);
+    if (rank && p.hits === rank[0]) this.sfx.play('streak', { pitch: 1.3 + RANKS.indexOf(rank) * 0.08 });
+  }
+  // The moment a move connects (its first active frame), for every knight.
+  onStrikeLand(p, kind) {
+    if (kind === 'shadow') return this.shadowCut(p);
+    this.slash(p, kind);
+    if (kind === 'finisher') {
+      // Landing the leap: a shockwave on the ground and a cloud of dust.
+      for (const [r0, col, dur] of [[0.6, 0xffffff, 0.22], [0.4, 0xff5fa2, 0.32]]) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r0 + 0.18, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+        ring.rotation.x = -Math.PI / 2; ring.position.set(p.x + p.aimX * 0.8, 0.08, p.z + p.aimZ * 0.8);
+        this.scene.add(ring);
+        this.slashes.push({ g: ring, t: 0, dur, ring: true });
+      }
+      this.juice.dust(p.x + p.aimX * 0.8, p.z + p.aimZ * 0.8, 0, 0, 14, 0.35, 0.6);
+      if (p === this.player) { this.view.shake(0.3); this.view.kick(0.03); }
+      this.sfx.play('thud');
+    }
+  }
+  // Shadow Step lands after the dash: a thin streak of light along the path, then the
+  // cuts. The knight is already standing at the far end, holding still.
+  shadowCut(p) {
+    const f = p.dashFrom ?? p, dx = p.x - f.x, dz = p.z - f.z, L = Math.hypot(dx, dz) || 0.01;
+    for (const [w, col, dur] of [[0.5, 0xff5fa2, 0.3], [0.14, 0xffffff, 0.22]]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, L + 0.6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2;
+      const g = new THREE.Group(); g.add(m);
+      g.position.set((f.x + p.x) / 2, 0.75, (f.z + p.z) / 2);
+      g.rotation.y = Math.atan2(dx, dz);
+      this.scene.add(g);
+      this.slashes.push({ g, t: 0, dur, yank: true });
+    }
+    this.sfx.play('swing', { pitch: 1.8, gap: 0 });
+    this.sfx.play('slam');
+    if (p === this.player) { this.view.shake(0.25); this.view.kick(0.04); }
+  }
   slash(p, kind) {
-    const arc = kind === 'finisher' ? 2.6 : 2.2, r = (kind === 'finisher' ? 2.1 : 1.9) * p.stats.reach;
-    const geo = new THREE.RingGeometry(r * 0.45, r, 24, 1, -arc / 2, arc);
+    const mv = MOVES[kind] ?? MOVES.slash;
+    const arc = Math.min(Math.PI * 2, mv.arc ?? 2.2), r = (mv.range ?? 1.9) * p.stats.reach;
+    const geo = new THREE.RingGeometry(r * 0.45, r, arc > 6 ? 40 : 24, 1, -arc / 2, arc);
     const cols = [], pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) { const a = Math.atan2(pos.getY(i), pos.getX(i)); const c = new THREE.Color(RAINBOW[Math.floor(((a + arc / 2) / arc) * 5.99)]); cols.push(c.r, c.g, c.b); }
     geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
-    m.rotation.set(-Math.PI / 2, 0, 0);
+    // The uppercut's arc stands up; everything else cuts flat.
+    m.rotation.set(kind === 'rising' ? 0 : -Math.PI / 2, kind === 'rising' ? Math.PI / 2 : 0, 0);
     const g = new THREE.Group(); g.add(m);
-    g.position.set(p.x, 0.7, p.z);
+    g.position.set(p.x, kind === 'rising' ? 0.9 : kind === 'finisher' ? 0.35 : 0.7, p.z);
     g.rotation.y = Math.atan2(p.aimX, p.aimZ) - Math.PI / 2;
     this.scene.add(g);
     this.slashes.push({ g, t: 0, dur: 0.16 });

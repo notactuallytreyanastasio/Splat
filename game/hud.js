@@ -38,6 +38,7 @@ export class Hud {
       <div class="gems">${icon('gem')}<span></span></div>
       <div class="lapchip"></div>
       <div class="streak">${BURST}<b></b><i></i></div>
+      <div class="hits"><b></b><span>HITS</span><i></i><em></em></div>
       <div class="banner"><h1></h1><h2></h2></div>
       <div class="boss"><label>EMPRESS MANTIS</label><div class="bar"><div class="fill"></div></div></div>
       <div class="boons"><h1>LEVEL UP!</h1><div class="cards"></div><p>press 1 / 2 / 3</p></div>
@@ -53,7 +54,7 @@ export class Hud {
       <div class="cue"><i></i><b>!</b></div>
       <div class="roster"></div>
       <div class="tags"></div>
-      <div class="help">WASD move · mouse aim · LMB slash · RMB batter-up · E grab/throw · SPACE dodge · Q blender · R potion</div>`;
+      <div class="help">WASD move · mouse aim · LMB slash x4 · RMB batter-up (mid-combo: uppercut, 3 hits: shadow step) · E grab/throw · SPACE dodge (then LMB: thrust) · Q blender · R potion</div>`;
     this.$ = s => root.querySelector(s);
     this.tags = new Map();
     this.$('.audio').onclick = e => { e.stopPropagation(); this.g.cycleAudio(); };
@@ -155,6 +156,19 @@ export class Hud {
       // named too, but they land on nearly every multi-kill, and a slam every kill is noise.
       s.classList.remove('pop', 'mile'); void s.offsetWidth; s.classList.add(title && n >= 5 ? 'mile' : 'pop');
     } else this.$('.streak i').textContent = '';
+  }
+  // The hit counter: a number that punches on every hit, its damage bonus, a rank name at
+  // the milestones, and a crack when a hurt breaks it.
+  combo(n, rank, broke) {
+    const h = this.$('.hits');
+    if (broke) { h.classList.remove('on', 'hit', 'rank'); h.classList.add('broke'); clearTimeout(this.hitsBroke); this.hitsBroke = setTimeout(() => h.classList.remove('broke'), 500); return; }
+    h.classList.toggle('on', n >= 3);
+    if (n < 3) return;
+    h.classList.remove('broke');
+    h.querySelector('b').textContent = n;
+    h.querySelector('em').textContent = `+${Math.round(Math.min(0.5, n * 0.015) * 100)}% dmg`;
+    if (rank) { h.querySelector('i').textContent = rank; h.classList.remove('rank'); void h.offsetWidth; h.classList.add('rank'); }
+    h.classList.remove('hit'); void h.offsetWidth; h.classList.add('hit');
   }
   title(onStart, net) {
     const t = this.$('.title');

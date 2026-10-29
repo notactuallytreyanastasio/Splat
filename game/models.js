@@ -84,26 +84,101 @@ export function knight(tint = {}) {
 }
 
 function poseKnight(r, s) {
-  const { legL, legR, armR, armL, head } = r.parts;
+  const { legL, legR, armR, armL, head, sword } = r.parts;
   const sw = walkSwing(s);
-  legL.rotation.x = sw; legR.rotation.x = -sw;
+  legL.rotation.set(sw, 0, 0); legR.rotation.set(-sw, 0, 0);
   r.body.position.y = Math.abs(Math.sin(s.phase)) * 0.06 * s.walk + Math.sin(s.t * 3) * 0.01;
-  r.body.rotation.y = 0;
+  r.body.rotation.set(0, 0, 0);
+  r.body.scale.set(1, 1, 1);
   armL.rotation.set(-sw * 0.6 - 0.2, 0, 0.15);
   armR.rotation.set(sw * 0.6 - 0.5, 0.3, -0.1);
   head.rotation.set(0, 0, 0);
+  sword.rotation.set(0, 0, 0);
   const a = s.action, p = s.p ?? 0;
-  if (a === 'light') {
-    // Horizontal sweep, alternating direction per combo step.
-    const dir = s.combo % 2 === 0 ? 1 : -1, e = easeOut(p);
-    armR.rotation.set(-1.5, dir * (1.7 - e * 3.3), 0);
-    r.body.rotation.y = dir * (0.5 - e * 1.0);
+  // Every strike drops into a low, wide stance and leans into the blow. The motion has
+  // three beats: a fast coil (anticipation), a snap that covers most of the arc in a
+  // few frames, and a held follow-through, which is what reads as speed.
+  const low = (k = 1) => { r.body.position.y -= 0.12 * k; legL.rotation.x = -0.75 * k; legR.rotation.x = 0.55 * k; legL.rotation.z = 0.25 * k; legR.rotation.z = -0.25 * k; };
+  const snap = (p, a, b) => easeOut(Math.min(1, Math.max(0, (p - a) / (b - a))));
+  if (a === 'slash') {
+    // Reverse grip: the blade runs back along the forearm and the fist leads the cut.
+    const k = snap(p, 0.18, 0.5), coil = Math.min(1, p / 0.18);
+    sword.rotation.x = Math.PI;
+    low(); r.body.rotation.x = 0.22;
+    armR.rotation.set(-1.45, 1.9 * coil - k * 3.6, 0.2);
+    armL.rotation.set(-0.5, 0.8, 0.3);
+    r.body.rotation.y = 0.7 * coil - k * 1.4;
+    head.rotation.y = -r.body.rotation.y * 0.6;
+  } else if (a === 'backhand') {
+    const k = snap(p, 0.15, 0.5), coil = Math.min(1, p / 0.15);
+    low(); r.body.rotation.x = 0.18;
+    armR.rotation.set(-1.5, -1.9 * coil + k * 3.8, -0.2);
+    armL.rotation.set(-1.0, -0.4, 0.2);
+    r.body.rotation.y = -0.8 * coil + k * 1.6;
+    r.body.position.y += Math.sin(p * Math.PI) * 0.12; // a skip into it
+    head.rotation.y = -r.body.rotation.y * 0.6;
+  } else if (a === 'spin') {
+    // A full turn on one foot, blade straight out, a little off the ground.
+    const k = snap(p, 0.12, 0.8);
+    low(0.7);
+    armR.rotation.set(-1.55, 1.2, 0); armL.rotation.set(-1.3, -1.3, 0);
+    r.body.rotation.y = 1.0 - k * (Math.PI * 2 + 1.0);
+    r.body.position.y += Math.sin(Math.min(1, p / 0.8) * Math.PI) * 0.25;
+    legR.rotation.x = 0.2; legL.rotation.x = -1.1;
   } else if (a === 'finisher') {
-    const e = p < 0.35 ? -p / 0.35 : easeOut((p - 0.35) / 0.65);
-    armR.rotation.set(-2.6 + Math.max(0, e) * 2.4, 0.2, 0);
-    r.body.position.y += p < 0.35 ? p * 0.5 : 0;
+    // The leaping slam: crouch, spring up into a forward somersault with the blade
+    // overhead, come down blade-first, and hold the landing low.
+    if (p < 0.12) { const c = p / 0.12; low(1.3 * c); armR.rotation.set(-0.4 - c * 0.6, 0.3, 0); }
+    else if (p < 0.48) {
+      const j = (p - 0.12) / 0.36;
+      r.body.position.y = Math.sin(j * Math.PI * 0.5) * 1.1 + 0.2;
+      r.body.rotation.x = -j * Math.PI * 2;
+      armR.rotation.set(-3.0, 0.1, 0); armL.rotation.set(-2.6, -0.3, 0);
+      legL.rotation.x = legR.rotation.x = -1.6 * Math.sin(j * Math.PI);
+    } else {
+      const k = snap(p, 0.48, 0.56), hold = Math.min(1, (p - 0.48) / 0.1);
+      r.body.position.y = 1.3 * (1 - k);
+      low(1.5 * hold);
+      r.body.rotation.x = 0.45 * hold;
+      armR.rotation.set(-3.0 + k * 2.75, 0.1, 0); armL.rotation.set(-0.6, -0.9, 0.6);
+    }
+  } else if (a === 'rising') {
+    // Rising Dragon: crouch with the blade low behind, then an uppercut that carries
+    // the knight up after the bug, leaning back at the top.
+    if (p < 0.2) { const c = p / 0.2; low(1.4 * c); armR.rotation.set(0.7 * c, 0.4, 0.3); r.body.rotation.x = 0.3 * c; }
+    else {
+      const k = snap(p, 0.2, 0.45), up = Math.sin(Math.min(1, (p - 0.2) / 0.8) * Math.PI);
+      r.body.position.y = up * 0.9;
+      armR.rotation.set(0.7 - k * 3.9, 0.3, 0.1); armL.rotation.set(-0.3, -0.6, 0.5);
+      r.body.rotation.x = 0.3 - k * 0.65;
+      legL.rotation.x = -1.2 * up; legR.rotation.x = 0.3 * up;
+      r.body.rotation.y = -k * 0.6;
+    }
+  } else if (a === 'shadow') {
+    // Shadow Step: a blur forward almost lying flat, blade reversed and trailing; then a
+    // frozen iai finish, arm straight out, while the cuts land behind.
+    sword.rotation.x = Math.PI;
+    if (p < 0.45) {
+      low(1.6); r.body.rotation.x = 0.7;
+      r.body.scale.set(0.85, 0.9, 1.35);
+      armR.rotation.set(-0.3, -0.4, 0.9); armL.rotation.set(0.6, 0, -0.4);
+    } else {
+      const hold = Math.min(1, (p - 0.45) / 0.12);
+      low(1.3); r.body.rotation.x = 0.35 * hold + 0.7 * (1 - hold);
+      armR.rotation.set(-1.5, -1.6, 0); armL.rotation.set(-0.8, 0.9, 0.3);
+      r.body.rotation.y = -0.5 * hold;
+      head.rotation.y = 0.5 * hold;
+    }
+  } else if (a === 'fang') {
+    // A lunging thrust straight down the aim, the whole body behind the point.
+    const k = snap(p, 0.1, 0.35), coil = Math.min(1, p / 0.1);
+    low(1.2); r.body.rotation.x = 0.15 + k * 0.35;
+    armR.rotation.set(-1.0 - k * 0.57, 0.6 * coil * (1 - k), 0);
+    armL.rotation.set(-0.4, 1.2, 0.4);
+    r.body.scale.set(1, 1, 1 + k * 0.15 * (1 - p));
   } else if (a === 'heavy') {
     // Batter Up: big wind-up behind, then a full-body sweep.
+    low(0.8);
     if (p < 0.45) { const w = p / 0.45; armR.rotation.set(-1.4, 2.2 * w, 0); r.body.rotation.y = 0.9 * w; }
     else { const e = easeOut((p - 0.45) / 0.55); armR.rotation.set(-1.5, 2.2 - e * 4.6, 0); r.body.rotation.y = 0.9 - e * 2.2; }
     armL.rotation.set(-1.2, -0.4, 0);
@@ -123,7 +198,6 @@ function poseKnight(r, s) {
     r.body.position.y = 0.3 + Math.sin(p * Math.PI) * 0.3;
     legL.rotation.x = legR.rotation.x = -1.4;
   }
-  if (a !== 'dodge') r.body.rotation.x = 0;
 }
 const easeOut = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 

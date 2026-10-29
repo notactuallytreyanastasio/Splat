@@ -155,6 +155,29 @@ export const BASE_STATS = {
   ricochet: 0, sticky: 0, grabRange: 1, grabAny: 0, bowling: 0,
 };
 
+// The knight's moveset. Mash attack for the chain; heavy branches off it.
+//   attack x4       slash (reverse grip) -> backhand -> spin cut -> leaping slam (the finisher)
+//   heavy alone     Batter Up, the launch along the aim
+//   1-2 hits, heavy Rising Dragon: an uppercut that throws bugs high and hops after them
+//   3 hits, heavy   Shadow Step: dash 4.5 m through the crowd, cutting everything you pass
+//   roll, attack    Fang: a lunging thrust out of the roll
+//   heavy again     after a Shadow Step that cut something: another one, dash to dash
+// dur in seconds (before attack speed), hit = the active window as a fraction of it.
+// arc is the cone in radians (7 means all around); radial knocks outward from the knight.
+export const MOVES = {
+  slash: { dur: 0.24, hit: [0.25, 0.55], range: 1.9, arc: 2.1, dmg: 11, knock: 4, lift: 1.2, stun: 0.35, lunge: 22 },
+  backhand: { dur: 0.24, hit: [0.25, 0.55], range: 1.9, arc: 2.1, dmg: 12, knock: 5, lift: 1.5, stun: 0.35, lunge: 22 },
+  spin: { dur: 0.34, hit: [0.2, 0.75], range: 2.0, arc: 7, dmg: 13, knock: 7, lift: 2.5, stun: 0.5, lunge: 12, radial: true },
+  finisher: { dur: 0.5, hit: [0.48, 0.64], range: 2.2, arc: 2.6, dmg: 22, knock: 12, lift: 6, stun: 0.8, lunge: 30, hop: true },
+  heavy: { dur: 0.62, hit: [0.45, 0.65], range: 2.5, arc: 2.9, dmg: 30, knock: 17, lift: 3.5, stun: 1.2 },
+  rising: { dur: 0.46, hit: [0.22, 0.5], range: 2.0, arc: 2.2, dmg: 16, knock: 3, lift: 13, stun: 1.3, lunge: 8 },
+  shadow: { dur: 0.46, hit: [0.5, 0.62], range: 1.1, dmg: 20, knock: 8, lift: 3, stun: 1.0, dash: 4.5 },
+  fang: { dur: 0.3, hit: [0.15, 0.45], range: 2.5, arc: 0.9, dmg: 15, knock: 10, lift: 1, stun: 0.5, lunge: 40 },
+};
+export const STRIKES = new Set(Object.keys(MOVES));
+const CHAIN = ['slash', 'backhand', 'spin', 'finisher'];
+const spec0 = k => { if (!MOVES[k]) throw new Error(`swing: no move ${k}`); return MOVES[k]; };
+
 export class Player extends Creature {
   constructor(game, x, z, tint = {}) {
     super(game, x, z, M.knight(tint));
@@ -167,6 +190,7 @@ export class Player extends Creature {
     this.rage = 0;
     this.potions = 2;
     this.combo = 0; this.comboTimer = 0;
+    this.hits = 0; this.hitsT = 0; // the hit counter (game.hitFx counts, a hurt resets)
     this.state = 'move'; this.stateT = 0; this.stateDur = 0;
     this.hitSet = new Set();
     this.dodgeCd = 0; this.heavyCd = 0;
@@ -207,8 +231,9 @@ export class Player extends Creature {
       this.parryT = 0.22; this.parryCd = 0.45; this.parryHit = false;
       if (this.guest) g.coop.request('parry');
     }
-    this.dodgeCd -= dt; this.heavyCd -= dt; this.comboTimer -= dt;
+    this.dodgeCd -= dt; this.heavyCd -= dt; this.comboTimer -= dt; this.hitsT -= dt; this.fangT = (this.fangT ?? 0) - dt;
     if (this.comboTimer <= 0) this.combo = 0;
+    if (this.hitsT <= 0 && this.hits) { this.hits = 0; this.game.onHits?.(this); }
     const al = Math.hypot(it.aimX, it.aimZ);
     if (al > 0.01) { this.aimX = it.aimX / al; this.aimZ = it.aimZ / al; }
     let mx = it.moveX, mz = it.moveZ;
@@ -223,7 +248,7 @@ export class Player extends Creature {
     const want = k => it[k] || this.buffer?.k === k;
     const take = () => { this.buffer = null; };
     // Rolling cancels the tail of any swing.
-    if (want('dodge') && this.dodgeCd <= 0 && ['light', 'finisher', 'heavy', 'throw'].includes(this.state) && (this.state !== 'heavy' || p > 0.65)) this.set('move', 0);
+    if (want('dodge') && this.dodgeCd <= 0 && (STRIKES.has(this.state) || this.state === 'throw') && this.state !== 'shadow' && (this.state !== 'heavy' || p > 0.65)) this.set('move', 0);
 
     if (it.potion && this.potions > 0 && this.hp < st.maxHp) {
       this.potions--; this.hp = Math.min(st.maxHp, this.hp + st.potionHeal);
@@ -244,25 +269,31 @@ export class Player extends Creature {
         take(); this.rage = 0; this.set('whirl', 2.6); g.onWhirl(this);
       } else if (want('grab') && this.tryGrab()) {
         take();
-      } else if (want('heavy') && this.heavyCd <= 0) {
-        take(); this.set('heavy', 0.62 / st.atkSpeed); this.heavyCd = 0.9; this.swingCount = (this.swingCount ?? 0) + 1;
+      } else if (want('heavy') && (this.combo > 0 || this.heavyCd <= 0)) {
+        take(); this.startHeavy();
       } else if (it.attack) {
         this.startLight();
       }
-    } else if (this.state === 'light' || this.state === 'finisher') {
-      moveMul = 0.25;
-      const active = this.state === 'finisher' ? [0.4, 0.6] : [0.25, 0.55];
-      if (p >= active[0] && p <= active[1]) this.swing(this.state);
-      if (p > 0.6 && it.attack) this.queued = true;
-      if (p >= 1) { this.set('move', 0); if (this.queued && !this.buffer) { this.queued = false; this.startLight(); } this.queued = false; }
-      if (p < 0.4) { this.vx += this.aimX * 22 * dt; this.vz += this.aimZ * 22 * dt; }
-    } else if (this.state === 'heavy') {
-      moveMul = p < 0.45 ? 0.15 : 0.05;
-      if (p >= 0.45 && p <= 0.65) this.swing('heavy');
-      if (p >= 1) this.set('move', 0);
+    } else if (STRIKES.has(this.state)) {
+      const mv = MOVES[this.state];
+      moveMul = this.state === 'heavy' ? (p < 0.45 ? 0.15 : 0.05) : 0.25;
+      if (p >= mv.hit[0] && p <= mv.hit[1]) this.swing(this.state);
+      if (mv.lunge && p < 0.4) { this.vx += this.aimX * mv.lunge * dt; this.vz += this.aimZ * mv.lunge * dt; }
+      if (this.state === 'shadow' && p < 0.45) { this.vx = this.dashX * mv.dash / (mv.dur * 0.45 / st.atkSpeed); this.vz = this.dashZ * mv.dash / (mv.dur * 0.45 / st.atkSpeed); this.inv = Math.max(this.inv ?? 0, 0.1); }
+      if (this.state === 'shadow' && p >= 0.45 && !this.dashDone) { this.dashDone = true; this.vx *= 0.1; this.vz *= 0.1; }
+      // A Shadow Step that cut something chains into another: dash to dash through a crowd.
+      if (this.state === 'shadow' && p > 0.62 && this.shadowHits > 0 && want('heavy')) { take(); this.startMove('shadow'); }
+      // Heavy cancels the back half of a chain hit into its branch: the combo keeps flowing.
+      else if (CHAIN.includes(this.state) && this.state !== 'finisher' && p > 0.55 && want('heavy')) { take(); this.startHeavy(); }
+      else {
+        if (p > 0.6 && it.attack) this.queued = true;
+        if (p >= 1) { this.set('move', 0); if (this.queued && !this.buffer && CHAIN.includes(this.lastMove)) { this.queued = false; this.startLight(); } this.queued = false; }
+      }
     } else if (this.state === 'dodge') {
       this.vx = this.dodgeX * 13; this.vz = this.dodgeZ * 13;
-      if (p >= 1) { this.set('move', 0); this.vx *= 0.3; this.vz *= 0.3; }
+      // Attack out of the back half of a roll (or just after it) is the Fang thrust.
+      if (it.attack && p > 0.45) { this.fangT = 0; this.set('move', 0); this.startMove('fang'); this.fangT = -1; }
+      else if (p >= 1) { this.set('move', 0); this.vx *= 0.3; this.vz *= 0.3; this.fangT = 0.22; }
     } else if (this.state === 'whirl') {
       moveMul = 0.85;
       this.whirlTick -= dt;
@@ -275,12 +306,12 @@ export class Player extends Creature {
 
     const speed = st.speed * moveMul;
     this.desiredX = mx * speed; this.desiredZ = mz * speed;
-    if (this.state === 'dodge') { /* velocity set directly */ }
-    else this.physics(dt);
-    if (this.state === 'dodge') this.world.move(this, dt);
+    const direct = this.state === 'dodge' || (this.state === 'shadow' && !this.dashDone);
+    if (!direct) this.physics(dt);
+    else this.world.move(this, dt);
 
     // Face the aim while fighting, the stick while walking.
-    const fighting = ['light', 'finisher', 'heavy', 'throw'].includes(this.state) || this.holding;
+    const fighting = STRIKES.has(this.state) || this.state === 'throw' || this.holding;
     if (fighting) this.facing += angDiff(Math.atan2(this.aimX, this.aimZ), this.facing) * Math.min(1, 20 * dt);
     else if (ml > 0.1 && this.state !== 'whirl') this.facing += angDiff(Math.atan2(mx, mz), this.facing) * Math.min(1, 14 * dt);
 
@@ -294,35 +325,69 @@ export class Player extends Creature {
     this.actionP = clamp(p, 0, 1);
     this.springs(dt);
   }
-  startLight() {
-    const finisher = this.combo === 2;
-    this.set(finisher ? 'finisher' : 'light', (finisher ? 0.48 : 0.3) / this.stats.atkSpeed);
-    this.swingKind = finisher ? 'finisher' : 'light';
-    this.comboStep = this.combo;
-    this.combo = (this.combo + 1) % 3;
-    this.comboTimer = 0.9;
-    this.game.sfx.play('swing', { pitch: finisher ? 0.7 : 1 + this.comboStep * 0.1 });
-    this.game.onSwing(this, this.state);
+  startMove(name) {
+    this.set(name, MOVES[name].dur / this.stats.atkSpeed);
+    this.lastMove = name; this.swingKind = name; this.dashDone = false; this.landed = false;
+    this.swingCount = (this.swingCount ?? 0) + 1;
+    if (name === 'shadow') { this.dashX = this.aimX; this.dashZ = this.aimZ; this.dashFrom = { x: this.x, z: this.z }; this.shadowHits = 0; }
+    this.game.onSwing(this, name);
   }
-  swing(kind) {
+  startLight() {
+    // Straight out of a roll, the first attack is the Fang thrust instead.
+    if (this.fangT > 0) { this.fangT = 0; return this.startMove('fang'); }
+    this.comboStep = this.combo;
+    this.combo = (this.combo + 1) % CHAIN.length;
+    this.comboTimer = 0.9;
+    this.startMove(CHAIN[this.comboStep]);
+  }
+  startHeavy() {
+    const step = this.combo; // hits landed in the chain so far
+    this.combo = 0;
+    if (step >= 3) { this.comboTimer = 0; this.heavyCd = 0.5; return this.startMove('shadow'); }
+    if (step >= 1) { this.comboTimer = 0; this.heavyCd = 0.5; return this.startMove('rising'); }
+    this.heavyCd = 0.9;
+    this.startMove('heavy');
+  }
+  // The hit counter feeds damage: +1.5% a hit up to +50% at 34 hits.
+  get hitBonus() { return 1 + Math.min(0.5, (this.hits ?? 0) * 0.015); }
+  swing(kind, hits) {
     const g = this.game, st = this.stats;
-    // A guest's blows are resolved by the host, once per swing.
-    if (this.guest) { if (!this.hitSet.has('sent')) { this.hitSet.add('sent'); g.coop.request('swing', { k: kind }); } return; }
-    const spec = {
-      light: { range: 1.9, arc: 2.1, dmg: 12, knock: 5, lift: 1.5, stun: 0.35 },
-      finisher: { range: 2.1, arc: 2.4, dmg: 22, knock: 12, lift: 6, stun: 0.8 },
-      heavy: { range: 2.5, arc: 2.9, dmg: 30, knock: 17, lift: 3.5, stun: 1.2 },
-    }[kind];
-    const range = spec.range * st.reach, aim = Math.atan2(this.aimX, this.aimZ);
-    for (const e of g.world.query(this.x, this.z, range, e => e.hittable && e !== this && !this.hitSet.has(e))) {
+    // The first active frame of a move is when it visibly connects: arcs and shockwaves.
+    if (!this.landed && hits == null) { this.landed = true; g.onStrikeLand?.(this, kind); }
+    // A guest's blows are resolved by the host, once per swing; the guest's hit counter rides along.
+    if (this.guest) { if (!this.hitSet.has('sent')) { this.hitSet.add('sent'); g.coop.request('swing', { k: kind, h: this.hits, ...(spec0(kind).dash ? { fx: this.dashFrom.x, fz: this.dashFrom.z, dx: this.dashX, dz: this.dashZ } : {}) }); } return; }
+    const spec = MOVES[kind];
+    if (!spec) throw new Error(`swing: no move ${kind}`);
+    const bonus = hits != null ? 1 + Math.min(0.5, hits * 0.015) : this.hitBonus;
+    const aim = Math.atan2(this.aimX, this.aimZ);
+    let targets;
+    if (spec.dash) {
+      // Everything within range of the line walked so far.
+      const f = this.dashFrom ?? this, ax = this.x - f.x, az = this.z - f.z, L2 = ax * ax + az * az || 1e-6;
+      targets = g.world.query((f.x + this.x) / 2, (f.z + this.z) / 2, Math.sqrt(L2) / 2 + spec.range + 0.5, e => {
+        if (!e.hittable || e === this || this.hitSet.has(e)) return false;
+        const u = Math.max(0, Math.min(1, ((e.x - f.x) * ax + (e.z - f.z) * az) / L2));
+        return Math.hypot(e.x - f.x - ax * u, e.z - f.z - az * u) < spec.range + e.radius;
+      });
+    } else {
+      const range = spec.range * st.reach;
+      targets = g.world.query(this.x, this.z, range, e => e.hittable && e !== this && !this.hitSet.has(e))
+        .filter(e => spec.arc >= 6.28 || Math.abs(angDiff(angleTo(this.x, this.z, e.x, e.z), aim)) <= spec.arc / 2 || Math.hypot(e.x - this.x, e.z - this.z) <= e.radius + 0.5);
+    }
+    if (spec.dash) this.shadowHits = (this.shadowHits ?? 0) + targets.length;
+    for (const e of targets) {
       const a = angleTo(this.x, this.z, e.x, e.z);
-      if (Math.abs(angDiff(a, aim)) > spec.arc / 2 && Math.hypot(e.x - this.x, e.z - this.z) > e.radius + 0.5) continue;
       this.hitSet.add(e);
       if (e.reflect) { e.reflect(this.aimX, this.aimZ); continue; }
       // Knock along the aim line, not radially, so you can steer bodies into each other.
-      let dx = kind === 'light' ? Math.sin(a) + this.aimX : this.aimX, dz = kind === 'light' ? Math.cos(a) + this.aimZ : this.aimZ;
+      // Quick cuts mix in the radial direction; the spin is all radial; the shadow step
+      // throws bugs off to either side of its path.
+      let dx = this.aimX, dz = this.aimZ;
+      if (spec.radial) { dx = Math.sin(a); dz = Math.cos(a); }
+      else if (spec.dash) { const side = Math.sign((e.x - this.x) * this.dashZ - (e.z - this.z) * this.dashX) || 1; dx = this.dashZ * side + this.dashX * 0.4; dz = -this.dashX * side + this.dashZ * 0.4; }
+      else if (kind === 'slash' || kind === 'backhand') { dx = Math.sin(a) + this.aimX; dz = Math.cos(a) + this.aimZ; }
       const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
-      g.damage(e, { amount: spec.dmg, dirX: dx, dirZ: dz, knock: spec.knock * st.knock, lift: spec.lift, stun: spec.stun, team: 'player', kind, source: this });
+      g.damage(e, { amount: Math.round(spec.dmg * bonus), dirX: dx, dirZ: dz, knock: spec.knock * st.knock, lift: spec.lift, stun: spec.stun, team: 'player', kind, source: this });
     }
   }
   whirlHit() {

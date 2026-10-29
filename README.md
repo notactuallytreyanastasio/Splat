@@ -24,8 +24,11 @@ npm run dev        # http://localhost:5177  (editor: /editor.html)
 |---|---|---|
 | move | WASD | left thumb, anywhere |
 | aim | mouse | auto lock-on, or drag SLASH |
-| slash combo (3rd hit launches) | LMB / J | SLASH |
+| slash chain: slash, backhand, spin, leaping slam | LMB / J | SLASH |
 | Batter Up (launch along aim) | RMB / K | BONK |
+| Rising Dragon uppercut (heavy after 1-2 hits) | RMB / K mid-chain | BONK |
+| Shadow Step dash-through (heavy after 3 hits) | RMB / K mid-chain | BONK |
+| Fang thrust | attack out of a roll | |
 | grab / throw | E | GRAB |
 | parry (tap as the ring closes) | Shift / C | PARRY |
 | roll | Space | ROLL |

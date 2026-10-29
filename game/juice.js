@@ -15,7 +15,12 @@ import { RAINBOW } from './models.js';
 
 // Dusky lilac and rose rather than white: white puffs disappear on the pale tiles.
 const DUST = [0xd9c8ec, 0xe9cfe0, 0xcdbfe0, 0xf0dccf];
-const SWINGS = { light: 0.13, finisher: 0.16, heavy: 0.18, whirl: 0.2 }; // ribbon lifetime per swing, seconds
+// Ribbon lifetime per move, seconds, and from what fraction of the move it draws (only
+// the business half: not a wind-up, not the finisher's somersault).
+const SWINGS = { slash: [0.14, 0.15], backhand: [0.14, 0.12], spin: [0.2, 0.1], finisher: [0.2, 0.44], heavy: [0.18, 0.42], rising: [0.2, 0.18], shadow: [0.12, 0.45], fang: [0.12, 0.08], whirl: [0.2, 0] };
+// Afterimages: moves that leave ghosts of the knight behind, and how often (seconds).
+const GHOSTS = { shadow: 0.022, fang: 0.035, spin: 0.05, finisher: 0.045, rising: 0.05, dodge: 0.06 };
+const GHOST_LIFE = 0.28, GHOST_MAX = 8;
 const _v = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Color(), _hot = new THREE.Color(0xff4f9a), _lilac = new THREE.Color(0xa98bff);
 
 // ------------------------------------------------------------------ sword ribbon
@@ -161,12 +166,14 @@ export class Juice {
     const r = p.rig, live = !p.ghost && !p.dead && r.root.visible !== false;
     let rb = this.ribbons.get(p);
     // Only the business half of a swing draws: not the heavy's wind-up or the finisher's raise.
-    const life = SWINGS[p.action] && !(p.action === 'heavy' && p.actionP < 0.42) && !(p.action === 'finisher' && p.actionP < 0.33) ? SWINGS[p.action] : 0;
+    const sw = SWINGS[p.action], life = sw && p.actionP >= sw[1] ? sw[0] : 0;
     if (life || rb) {
       rb ??= this.ribbons.set(p, new Ribbon(this.g.scene)).get(p);
       rb.update(r.parts.sword, live && life > 0, life || 0.12, dt);
     }
     if (!live || dt <= 0) { p.wasRolling = false; return; }
+    const gi = GHOSTS[p.action];
+    if (gi && (p.ghostT = (p.ghostT ?? 0) - dt) <= 0 && !(p.action === 'shadow' && p.actionP > 0.5)) { p.ghostT = gi; this.afterimage(p); }
     const sp = Math.hypot(p.vx, p.vz);
     // Footfalls: one small puff each time a foot plants (every half walk cycle).
     const step = Math.floor(p.phase / Math.PI);
@@ -181,9 +188,34 @@ export class Juice {
     if (rolling && sp > 1) this.dust(p.x - p.vx / sp * 0.3, p.z - p.vz / sp * 0.3, -p.vx * 0.05, -p.vz * 0.05, 1, 0.24, 0.35);
     p.wasRolling = rolling;
   }
+  // A flat, fading copy of the knight as it stands this frame. The copy shares the rig's
+  // geometry (only its material is its own), so a ghost costs draw calls, not memory;
+  // GHOST_MAX caps how many draw at once.
+  afterimage(p) {
+    const ghosts = (this.ghosts ??= []);
+    if (ghosts.length >= GHOST_MAX) this.dropGhost(0);
+    p.rig.root.updateMatrixWorld(true);
+    const g = p.rig.root.clone();
+    const mat = new THREE.MeshBasicMaterial({ color: ghosts.length % 2 ? 0xc8b2ff : 0xff5fa2, transparent: true, opacity: 0.55, depthWrite: false });
+    g.traverse(o => {
+      if (!o.isMesh) return;
+      const flat = o.geometry.type === 'RingGeometry' || o.geometry.type === 'CircleGeometry';
+      if (o.name === 'outline' || flat) o.visible = false;
+      o.material = mat; o.castShadow = false; o.receiveShadow = false;
+    });
+    this.g.scene.add(g);
+    ghosts.push({ g, mat, t: 0 });
+  }
+  dropGhost(i) { const h = this.ghosts[i]; this.g.scene.remove(h.g); h.mat.dispose(); this.ghosts.splice(i, 1); }
   forget(p) { this.ribbons.get(p)?.dispose(); this.ribbons.delete(p); }
   bud(x, z, c) { this.buds.add(x, z, c ?? fx.pick(RAINBOW)); }
   update(dt) {
     this.buds.update(dt, this.onPop);
+    for (let i = (this.ghosts?.length ?? 0) - 1; i >= 0; i--) {
+      const h = this.ghosts[i];
+      h.t += dt;
+      h.mat.opacity = 0.55 * Math.pow(1 - Math.min(1, h.t / GHOST_LIFE), 1.5);
+      if (h.t >= GHOST_LIFE) this.dropGhost(i);
+    }
   }
 }

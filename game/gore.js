@@ -68,7 +68,7 @@ export class Gore {
     const h = (t.rig?.height ?? 1) * 0.55;
     const n = Math.min(60, 6 + info.amount * 0.9);
     this.spray(t.x, t.y + h, t.z, info.dirX ?? 0, info.dirZ ?? 0, n, 4 + (info.knock ?? 0) * 0.5, colors);
-    if (info.crit || info.kind === 'finisher' || info.kind === 'heavy') this.confettiBurst(t.x, t.y + h, t.z, 10, 4, [0xff5fa2, 0xffffff, 0xfff1a1]);
+    if (info.crit || info.kind === 'finisher' || info.kind === 'heavy' || info.kind === 'rising' || info.kind === 'shadow') this.confettiBurst(t.x, t.y + h, t.z, 10, 4, [0xff5fa2, 0xffffff, 0xfff1a1]);
     if (t.addWound && Math.random() < 0.5) t.addWound();
   }
   trail(t) { this.drop(t.x, t.y + 0.4, t.z, -t.vx * 0.1 + fx.f(-0.5, 0.5), fx.f(1, 3), -t.vz * 0.1 + fx.f(-0.5, 0.5), fx.pick(t.def?.blood ?? [0xd4002e]), fx.f(0.05, 0.1)); }

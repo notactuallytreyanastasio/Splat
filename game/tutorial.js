@@ -64,8 +64,8 @@ const STEPS = [
   },
   {
     title: 'Land a combo finisher', icon: 'combo', need: 1,
-    kb: () => `Keep swinging: ${mouse('l')}${mouse('l')}${mouse('l')}. Every third hit in a row is a finisher that sends bugs flying.`,
-    touch: () => `Keep holding ${C('SLASH', 'slash')}. Every third hit in a row is a finisher that sends bugs flying.`,
+    kb: () => `Keep swinging: ${mouse('l')}${mouse('l')}${mouse('l')}${mouse('l')}. Slash, backhand, spin, and the fourth hit is a leaping slam that sends bugs flying.`,
+    touch: () => `Keep holding ${C('SLASH', 'slash')}. Slash, backhand, spin, and the fourth hit is a leaping slam that sends bugs flying.`,
     // A heavy, sleepy caterpillar: it barely slides, so all three swings connect.
     start: t => t.spawn('caterpillar', t.spot(2.4), { hp: 160, mass: 2.6 }),
     tick: t => { if (!t.alive().length) t.spawn('caterpillar', t.spot(2.4), { hp: 160, mass: 2.6 }); },

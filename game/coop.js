@@ -5,7 +5,7 @@
 //   host       -> "w"  world snapshot (enemies, loot, doors, xp), 15/s
 //   host       -> "e"  effect events (hits, kills, banners, targeted hurt/teleport), batched
 //   guest      -> "a"  action requests (swing, whirl, grab, throw) that the host resolves
-import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable } from './actors.js';
+import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, STRIKES } from './actors.js';
 
 const r2 = v => Math.round(v * 100) / 100;
 export const TINTS = [
@@ -60,7 +60,7 @@ export class Coop {
   // ------------------------------------------------------------ own knight
   sendPlayer() {
     const p = this.g.player;
-    if (['light', 'finisher', 'heavy'].includes(p.state) && p.stateT < 0.05 && this._lastSwingState !== p.stateT) this.swings++;
+    if (STRIKES.has(p.state) && p.stateT < 0.05 && this._lastSwingState !== p.stateT) this.swings++;
     this._lastSwingState = p.stateT;
     this.net.send('p', {
       x: r2(p.x), z: r2(p.z), y: r2(p.y), vx: r2(p.vx), vz: r2(p.vz), f: r2(p.facing),
@@ -82,7 +82,7 @@ export class Coop {
     }
     rp.net = m;
     rp.name = m.nm;
-    if (m.sw !== rp.lastSw && rp.lastSw != null && ['light', 'finisher', 'heavy'].includes(m.a)) { this.g.slash(rp, m.a); this.g.sfx.play('swing'); }
+    if (m.sw !== rp.lastSw && rp.lastSw != null && STRIKES.has(m.a)) { this.g.sfx.play('swing'); if (m.a !== 'shadow') this.g.slash(rp, m.a); }
     rp.lastSw = m.sw;
     rp.hp = m.hp; rp.stats.maxHp = m.mx; rp.rage = m.rg;
     rp.ghost = !!m.dd;
@@ -127,7 +127,7 @@ export class Coop {
     if (!rp || rp.ghost) return;
     rp.x = m.x; rp.z = m.z; rp.aimX = m.ax; rp.aimZ = m.az;
     Object.assign(rp.stats, m.st);
-    if (m.t === 'swing') { rp.hitSet.clear(); rp.swing(m.k); }
+    if (m.t === 'swing') { rp.hitSet.clear(); if (m.fx != null) { rp.dashFrom = { x: m.fx, z: m.fz }; rp.dashX = m.dx; rp.dashZ = m.dz; } rp.swing(m.k, m.h ?? 0); }
     else if (m.t === 'whirl') rp.whirlHit();
     else if (m.t === 'grab') { if (!rp.holding && rp.tryGrab()) this.g.fx('grabbed', { to: m.from, id: rp.holding.nid }); }
     else if (m.t === 'throw') { if (rp.holding) rp.throwHeld(m.pw ?? 1); }
