@@ -3,22 +3,30 @@
 import { icon } from './icons.js';
 
 import { ICONS } from './tutorial.js';
+
+// Icons are drawn here, never emoji: ink outline, pastel fill, like everything else.
+const SPARK = `<svg class="spark" viewBox="-14 -14 28 28"><path d="M0-12C1.4-3 3-1.4 12 0C3 1.4 1.4 3 0 12C-1.4 3-3 1.4-12 0C-3-1.4-1.4-3 0-12Z" fill="#fff9c9" stroke="#3a2346" stroke-width="2.6" stroke-linejoin="round"/></svg>`;
+const BURST = (() => {
+  const pts = [];
+  for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2, r = i % 2 ? 52 : 92 - (i % 4) * 8; pts.push(`${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`); }
+  return `<svg class="burst" viewBox="-100 -100 200 200"><polygon points="${pts.join(' ')}" fill="#fff1a1" stroke="#3a2346" stroke-width="7" stroke-linejoin="round"/><circle r="30" fill="#ff9ecb" stroke="#3a2346" stroke-width="6"/></svg>`;
+})();
 export class Hud {
   constructor(game) {
     this.g = game;
     const root = document.getElementById('hud');
     root.innerHTML = `
-      <div class="orb hp"><div class="fill"></div><span></span></div>
-      <div class="orb rage"><div class="fill"></div><span></span></div>
+      <div class="orb hp"><div class="lag"></div><div class="fill"></div><span></span></div>
+      <div class="orb rage"><div class="fill"></div>${SPARK.repeat(5)}<span></span></div>
       <div class="xp"><div class="fill"></div><b class="lvl"></b></div>
       <div class="potions"></div>
       <div class="gems">${icon('gem')}<span></span></div>
-      <div class="streak"><b></b><i></i></div>
+      <div class="streak">${BURST}<b></b><i></i></div>
       <div class="banner"><h1></h1><h2></h2></div>
       <div class="boss"><label>EMPRESS MANTIS</label><div class="bar"><div class="fill"></div></div></div>
       <div class="boons"><h1>LEVEL UP!</h1><div class="cards"></div><p>press 1 / 2 / 3</p></div>
       <div class="end"></div>
-      <div class="vignette"></div>
+      <div class="vignette"></div><div class="lowhp"></div><div class="edge"></div>
       <div class="title"><h1>PASTEL GARDEN<br>MASSACRE</h1><h2>a very pretty place to make a mess</h2>
         <div class="keys"><b>WASD</b> move <b>mouse</b> aim <b>LMB</b> slash combo <b>RMB</b> batter-up <b>E</b> grab &amp; throw <b>SPACE</b> roll <b>Q</b> rainbow blender <b>R</b> potion <b>SHIFT</b> parry <b>TAB</b> lock <b>M</b> sound</div>
         <p class="tip">anything you hit hard enough becomes a projectile. so do the bodies.</p>
@@ -35,13 +43,22 @@ export class Hud {
     this.$('.audio').onclick = e => { e.stopPropagation(); this.g.cycleAudio(); };
     this.audioIcon(game.audioMode);
     this.bannerT = 0;
+    this.lagHp = game.player.hp; this.lagHold = 0; this.beatT = 0; this.rageFull = false;
   }
   update(dt) {
     const g = this.g, p = g.player, st = p.stats;
     this.$('.hp .fill').style.height = Math.max(0, (p.hp / st.maxHp) * 100) + '%';
     this.$('.hp span').textContent = Math.max(0, Math.ceil(p.hp));
+    // Lost health lingers as a lemon chunk for a beat, then drains: you can read how big a hit was.
+    const rdt = dt / (g.loop.speed || 1);
+    if (p.hp >= this.lagHp) this.lagHp = p.hp;
+    else if ((this.lagHold -= rdt) <= 0) this.lagHp = Math.max(p.hp, this.lagHp - st.maxHp * rdt * 0.6);
+    this.$('.hp .lag').style.height = Math.max(0, (this.lagHp / st.maxHp) * 100) + '%';
     this.$('.rage .fill').style.height = p.rage + '%';
-    this.$('.rage').classList.toggle('full', p.rage >= 100);
+    const full = p.rage >= 100;
+    this.$('.rage').classList.toggle('full', full);
+    if (full && !this.rageFull) { this.restart('.rage', 'ding'); g.sfx.play('ragefull'); }
+    this.rageFull = full;
     this.$('.rage span').textContent = p.rage >= 100 ? 'Q!' : Math.floor(p.rage);
     this.$('.xp .fill').style.width = (g.xp / g.xpNeed()) * 100 + '%';
     this.$('.xp .lvl').textContent = 'LV ' + g.level_;
@@ -54,8 +71,16 @@ export class Hud {
     this.bannerT -= dt;
     this.$('.banner').classList.toggle('on', this.bannerT > 0);
     const v = this.$('.vignette');
-    v.style.opacity = Math.max(0, parseFloat(v.style.opacity || 0) - dt * 2.5) + (p.hp < st.maxHp * 0.3 ? 0.25 + Math.sin(g.time * 6) * 0.1 : 0) * 0;
-    this.$('.vignette').classList.toggle('low', p.hp < st.maxHp * 0.3);
+    v.style.opacity = Math.max(0, parseFloat(v.style.opacity || 0) - dt * 2.5);
+    // Low health: a heartbeat, quicker the closer you are to popping, and a soft pink
+    // pulse at the screen edge on each beat.
+    const frac = p.hp / st.maxHp, low = frac < 0.3 && p.hp > 0 && !p.ghost && g.state === 'play' && g.started;
+    this.$('.lowhp').classList.toggle('on', low);
+    if (low && (this.beatT -= rdt) <= 0) {
+      this.beatT = 0.6 + frac * 1.6;
+      g.sfx.play('heartbeat', { vol: 1.3 - frac * 2, gap: 0.3 });
+      this.restart('.lowhp', 'beat');
+    } else if (!low) this.beatT = 0;
     if (g.coop) this.updateCoop();
     // Parry cue: a ring closes on your knight; tap as it lands.
     const cue = this.$('.cue'), t = g.threat ?? Infinity, on = t < 0.45 && !p.ghost && g.state === 'play';
@@ -103,7 +128,9 @@ export class Hud {
     if (n > 1) {
       this.$('.streak b').textContent = n + ' KILLS';
       if (title) this.$('.streak i').textContent = title;
-      s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop');
+      // The big milestones (5, 7, 10, 15) get a starburst and a much bigger slam. 2 to 4 are
+      // named too, but they land on nearly every multi-kill, and a slam every kill is noise.
+      s.classList.remove('pop', 'mile'); void s.offsetWidth; s.classList.add(title && n >= 5 ? 'mile' : 'pop');
     } else this.$('.streak i').textContent = '';
   }
   title(onStart, net) {
@@ -134,8 +161,10 @@ export class Hud {
     t.querySelector('button').onclick = go;
     addEventListener('keydown', key);
   }
+  restart(sel, cls) { const el = this.$(sel); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  crit() { this.restart('.edge', 'on'); }
   parried() { const c = this.$('.cue'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
-  hurt() { const v = this.$('.vignette'); v.style.opacity = 0.8; }
+  hurt() { const v = this.$('.vignette'); v.style.opacity = 0.8; this.lagHold = 0.45; this.restart('.orb.hp', 'hit'); }
   showBoons(offers, live = false) {
     const el = this.$('.boons');
     clearTimeout(this.boonOut);

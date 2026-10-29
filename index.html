@@ -52,6 +52,29 @@
   .orb.rage { right: 20px; } .orb.rage .fill { background: linear-gradient(#e2d4ff, #a98bff); }
   .orb.rage.full { animation: throb .5s infinite alternate; } .orb.rage.full .fill { background: linear-gradient(90deg,#ff9ecb,#ffc3a0,#fff1a1,#9ff0d4,#a6dcff,#c8b2ff); background-size: 300% 100%; animation: rainbow 1s linear infinite; }
   @keyframes throb { to { transform: scale(1.07); } } @keyframes rainbow { to { background-position: 300% 0; } }
+  /* Juice: the health orb wobbles and blanches when hit, lost health lingers as a lemon chunk. */
+  .orb .lag { position: absolute; left: 0; right: 0; bottom: 0; background: #fff1a1; }
+  .orb.hp.hit { animation: orbhit .45s ease-out; } .orb.hp.hit .fill { animation: orbflash .3s ease-out; }
+  @keyframes orbhit { 0% { transform: scale(1.18) rotate(-10deg); } 20% { transform: scale(.9) rotate(8deg); } 40% { transform: scale(1.06) rotate(-5deg); } 65% { transform: scale(.98) rotate(2deg); } 100% { transform: none; } }
+  @keyframes orbflash { 0% { filter: brightness(2.2) saturate(.3); } 100% { filter: none; } }
+  /* Full rage: drawn sparkles twinkle in the liquid and a lemon halo pulses round the orb. */
+  .orb .spark { position: absolute; width: 32%; opacity: 0; pointer-events: none; }
+  .orb .spark:nth-of-type(1) { left: 8%; top: 44%; } .orb .spark:nth-of-type(2) { left: 56%; top: 14%; width: 26%; }
+  .orb .spark:nth-of-type(3) { left: 58%; top: 56%; } .orb .spark:nth-of-type(4) { left: 30%; top: 66%; width: 24%; }
+  .orb .spark:nth-of-type(5) { left: 26%; top: 18%; width: 22%; }
+  .orb.rage.full .spark { animation: twinkle 1.2s ease-in-out infinite; }
+  .orb.rage.full .spark:nth-of-type(2) { animation-delay: .25s; } .orb.rage.full .spark:nth-of-type(3) { animation-delay: .5s; }
+  .orb.rage.full .spark:nth-of-type(4) { animation-delay: .75s; } .orb.rage.full .spark:nth-of-type(5) { animation-delay: .95s; }
+  @keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(.2) rotate(0); } 35% { opacity: 1; transform: scale(1.1) rotate(45deg); } 60% { opacity: 0; transform: scale(.4) rotate(90deg); } }
+  .orb.rage.full { box-shadow: 0 6px 0 var(--ink), 0 0 0 4px #fff1a1, 0 0 18px 6px rgba(255,241,161,.75); }
+  .orb.rage.full.ding { animation: ding .5s ease-out, throb .5s .5s infinite alternate; }
+  @keyframes ding { 0% { transform: scale(1.35); box-shadow: 0 6px 0 var(--ink), 0 0 0 10px #fff, 0 0 50px 24px #fff1a1; } 100% { transform: scale(1); } }
+  /* Low health and crits: a soft pink heartbeat and a thin lemon flash at the screen edge. */
+  .lowhp { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity .6s; background: radial-gradient(ellipse at center, transparent 62%, rgba(255,95,162,.38) 100%); }
+  .lowhp.on { opacity: .3; } .lowhp.on.beat { animation: beat .55s ease-out; }
+  @keyframes beat { 0% { opacity: .3; } 14% { opacity: .8; } 32% { opacity: .45; } 46% { opacity: .7; } 100% { opacity: .3; } }
+  .edge { position: absolute; inset: 0; z-index: -1; opacity: 0; box-shadow: inset 0 0 0 5px rgba(255,241,161,.95), inset 0 0 28px 6px rgba(255,255,255,.6); }
+  .edge.on { animation: edge .22s ease-out; } @keyframes edge { 0% { opacity: 1; } 100% { opacity: 0; } }
   .xp { position: absolute; left: 160px; right: 160px; bottom: 26px; height: 18px; border: 4px solid var(--ink); border-radius: 12px; background: #fff6fb; overflow: hidden; }
   .xp .fill { height: 100%; background: linear-gradient(90deg, var(--mint), #a6dcff); transition: width .2s; }
   .xp .lvl { position: absolute; left: 50%; top: -3px; transform: translateX(-50%); font-size: 15px; color: #fff; -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
@@ -59,6 +82,12 @@
   .gems { position: absolute; right: 152px; bottom: 52px; display: flex; align-items: center; gap: 4px; font-size: 22px; font-weight: 700; color: var(--lemon); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
   .streak { position: absolute; right: 30px; top: 90px; text-align: right; opacity: 0; transition: opacity .3s; }
   .streak.on { opacity: 1; } .streak.pop { animation: pop .3s; }
+  .streak { isolation: isolate; transform-origin: 100% 50%; }
+  .streak .burst { position: absolute; right: -10px; top: -46px; width: 150px; z-index: -1; opacity: 0; pointer-events: none; }
+  .streak.mile { animation: milepop .6s ease-out; } .streak.mile .burst { animation: burst .75s ease-out; } .streak.mile b { animation: milecolor .6s steps(1) 2; }
+  @keyframes milepop { 0% { transform: scale(1.9) rotate(-10deg); } 25% { transform: scale(.82) rotate(7deg); } 45% { transform: scale(1.16) rotate(-4deg); } 70% { transform: scale(.97) rotate(1deg); } 100% { transform: none; } }
+  @keyframes burst { 0% { opacity: 1; transform: scale(.2) rotate(0); } 35% { opacity: 1; transform: scale(1.1) rotate(25deg); } 100% { opacity: 0; transform: scale(1.35) rotate(45deg); } }
+  @keyframes milecolor { 0% { color: #fff; } 50% { color: var(--lemon); } }
   .streak b { display: block; font-size: 40px; color: var(--pink); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }
   .streak i { display: block; font-style: normal; font-size: 26px; color: var(--lemon); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
   @keyframes pop { 0% { transform: scale(1.6) rotate(-6deg); } 100% { transform: scale(1); } }
@@ -79,8 +108,6 @@
   .end .stats div { background: var(--cream); border: 5px solid var(--ink); border-radius: 18px; padding: 10px; box-shadow: 0 6px 0 var(--ink); font-size: 15px; }
   .end .stats b { display: block; font-size: 30px; color: var(--pink); }
   .vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 30, 90, .55)); }
-  .vignette.low { animation: lowhp 1s infinite; }
-  @keyframes lowhp { 50% { box-shadow: inset 0 0 120px rgba(255,30,90,.5); } }
   .title { position: absolute; inset: 0; display: none; place-content: center; text-align: center; background: radial-gradient(circle, rgba(255,246,251,.85), rgba(255,214,232,.92)); pointer-events: auto; }
   .title.on { display: grid; }
   .title h1 { margin: 0; font-size: 84px; line-height: .95; color: #fff; -webkit-text-stroke: 11px var(--ink); paint-order: stroke fill; letter-spacing: 2px; transform: rotate(-3deg); }

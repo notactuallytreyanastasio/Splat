@@ -41,5 +41,9 @@ export function defineSounds(s) {
   // Tutorial: a bright little 'got it' for each lesson, and a soft chime for the next card.
   s.define('sting', (s, t) => { [784, 988, 1175, 1568].forEach((f, i) => s.tone(t + i * 0.055, { type: 'triangle', f0: f, dur: 0.35, vol: 0.15 })); s.tone(t + 0.22, { type: 'sine', f0: 2349, f1: 3136, dur: 0.4, vol: 0.07 }); s.noise(t, { dur: 0.25, vol: 0.1, f0: 5000, f1: 9000, q: 2 }); });
   s.define('card', (s, t) => { s.tone(t, { type: 'sine', f0: 660, dur: 0.12, vol: 0.09 }); s.tone(t + 0.07, { type: 'sine', f0: 990, dur: 0.2, vol: 0.09 }); });
+  // Lub-dub: two soft sub thumps, quiet enough to sit under the fight.
+  s.define('heartbeat', (s, t, o) => { s.tone(t, { type: 'sine', f0: 72, f1: 44, dur: 0.16, vol: 0.32 * (o.vol ?? 1) }); s.tone(t + 0.17, { type: 'sine', f0: 62, f1: 40, dur: 0.2, vol: 0.22 * (o.vol ?? 1) }); });
+  s.define('bloom', (s, t, o) => { s.tone(t, { type: 'sine', f0: 380 * P(o), f1: 1150 * P(o), dur: 0.16, vol: 0.14 }); s.noise(t, { dur: 0.12, vol: 0.14, f0: 2500, f1: 900 }); });
+  s.define('ragefull', (s, t) => [1046, 1318, 1568, 2093].forEach((f, i) => s.tone(t + i * 0.045, { type: 'triangle', f0: f, dur: 0.22, vol: 0.09 })));
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
 }
