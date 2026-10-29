@@ -33,7 +33,8 @@ for (const [name, d] of Object.entries(DEVICES)) {
   await touch('touchStart', [[sx, sy, 1]]);
   for (let i = 1; i <= 6; i++) { await touch('touchMove', [[sx + i * 10, sy - i * 10, 1]]); await page.waitForTimeout(30); }
   await touch('touchStart', [[sx + 60, sy - 60, 1], [btn.x + btn.width / 2, btn.y + btn.height / 2, 2]]);
-  await page.waitForTimeout(1500);
+  // Wait in game time, not wall time: a loaded machine renders few frames per second.
+  await page.waitForFunction(() => window.__game.telemetry.c.swings > 0 && window.__game.time > 1, null, { timeout: 6000 }).catch(() => {});
   const mid = await page.evaluate(() => { const g = window.__game; return { x: g.player.x, z: g.player.z, swings: g.telemetry.c.swings, touch: g.touch.active, lock: !!g.lock }; });
   await page.screenshot({ path: `tools/out/touch-${name}.png` });
   await touch('touchEnd', []);
