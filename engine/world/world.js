@@ -27,6 +27,9 @@ export class World {
     this.map = map;
     this.entities = [];
     this.onImpact = null; // (mover, other, relativeSpeed) => void
+    // (entity, hit) => true when the game takes over a tile contact (a bumper, say): the
+    // entity's onWall is skipped and move() returns null. hit carries tx, tz of the tile.
+    this.onTile = null;
     // Stable ids so a network peer can name an entity. Proxies arrive with theirs.
     this.byId = new Map();
     this.nextId = 1;
@@ -79,6 +82,7 @@ export class World {
         if (hit && (!wall || hit.speed > wall.speed)) wall = hit;
       }
     }
+    if (wall && this.onTile?.(e, wall)) return null;
     if (wall) e.onWall(wall);
     return wall;
   }

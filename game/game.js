@@ -18,7 +18,7 @@ import { Music } from '../engine/audio/music.js';
 import { defineMusic } from './music.js';
 import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
-import { parseLevel, buildLevelMeshes } from './level.js';
+import { parseLevel, buildLevelMeshes, bumpMushroom, updateMushrooms } from './level.js';
 import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from './actors.js';
 import { Gore } from './gore.js';
 import { Hud } from './hud.js';
@@ -63,6 +63,7 @@ export class Game {
     this.map = this.level.map;
     this.world = new World(this.map);
     this.world.onImpact = (a, b, rel) => this.impact(a, b, rel);
+    this.world.onTile = (e, hit) => this.tileHit(e, hit);
     this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed));
     this.flow = new FlowField(this.map);
     this.gore = new Gore(this);
@@ -188,6 +189,7 @@ export class Game {
       case 'lose': return this.lose();
       case 'restart': return this.restart(false, d.seed);
       case 'parried': return this.parriedFx(d);
+      case 'bmp': return this.bumpFx(d);
     }
   }
 
@@ -483,6 +485,74 @@ export class Game {
     this.fx('sx', { n: 'bonk', o: { pitch: 0.7 + chain * 0.15 } });
     if (chain >= 2) { this.say(`PINBALL x${chain}!`, e.x, 2.2, e.z, { cls: 'pinball', scale: 1 + chain * 0.15, life: 1.2 }); this.loop.freeze(0.06 + chain * 0.02); }
     else this.say(mass < 0.5 ? 'SHRAPNEL!' : 'CORPSE BOWLING!', e.x, 2, e.z, { cls: 'bonk' });
+  }
+  // Mushrooms are pinball bumpers. A launched body (or reflected pollen) comes off one
+  // faster than it went in, reflected about the line from the stalk's centre, so the
+  // round cap decides the bank angle rather than the square tile behind it. The chain
+  // goes up, so whatever it hits next is a PINBALL. Walkers just collide.
+  tileHit(e, hit) {
+    if (this.guest || this.map.at(hit.tx, hit.tz) !== 'o' || e.carried) return false;
+    // collideTiles already bounced the body with its own restitution; undo that to get
+    // the speed it arrived with.
+    const r = 1 + e.restitution, ix = e.vx - r * hit.speed * hit.nx, iz = e.vz - r * hit.speed * hit.nz;
+    const inSp = Math.hypot(ix, iz);
+    const pollen = e instanceof Pollen;
+    if (pollen ? e.team !== 'player' : !(e.thrownBy === 'player' && inSp > e.launchSpeed)) return false;
+    if (e.bumpAt != null && e.age - e.bumpAt < 0.15) return false;
+    e.flightBumps = e.bumpAt != null && e.age - e.bumpAt < 1.2 ? e.flightBumps + 1 : 1;
+    e.bumpAt = e.age;
+    const out = this.bounceOff(hit.tx, hit.tz, e.x, e.z, ix, iz, inSp, e.flightBumps);
+    e.vx = out.vx; e.vz = out.vz;
+    if (!pollen) {
+      e.chain = (e.chain || 0) + 1;
+      e.impacted.clear();            // the rebound may come back for the one it just hit
+      if (!e.airborne) e.vy = Math.max(e.vy, 2.5);
+      e.squashV -= 6;
+      this.fx('sp', { x: r2(e.x), y: 0.6, z: r2(e.z), dx: out.nx, dz: out.nz, n: 10, p: 4, c: e.def?.blood ?? [0xd4002e] });
+    }
+    this.boing(hit.tx, hit.tz, out, pollen ? 1 : e.chain);
+    return true;
+  }
+  // Debris (corpses, gibs) bounces the same way on every peer; only a host projectile
+  // scores the chain and makes the noise.
+  bumpDebris(it, tx, tz) {
+    if (this.map.at(tx, tz) !== 'o') return false;
+    const p = it.obj.position, sp = Math.hypot(it.v.x, it.v.z);
+    if (sp < 5 || (it.bumpAt != null && this.time - it.bumpAt < 0.15)) return false;
+    it.flightBumps = it.bumpAt != null && this.time - it.bumpAt < 1.2 ? it.flightBumps + 1 : 1;
+    it.bumpAt = this.time;
+    const out = this.bounceOff(tx, tz, p.x, p.z, it.v.x, it.v.z, sp, it.flightBumps);
+    it.v.x = out.vx; it.v.z = out.vz; it.v.y = Math.max(it.v.y, 3);
+    if (it.proj && !this.guest) { it.proj.chain++; it.proj.hit.clear(); this.boing(tx, tz, out, it.proj.chain); }
+    return true;
+  }
+  bounceOff(tx, tz, x, z, vx, vz, sp, k) {
+    let nx = x - (tx + 0.5), nz = z - (tz + 0.5);
+    const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+    const vn = vx * nx + vz * nz;
+    let rx = vx - 2 * Math.min(0, vn) * nx, rz = vz - 2 * Math.min(0, vn) * nz;
+    const rl = Math.hypot(rx, rz) || 1;
+    // A boost, not a loss: +25% and a kick on the first bump of a flight. Later bumps in
+    // the same flight give less and then take, or a body lined up between two caps
+    // would ping-pong at the cap speed forever; head-on that ends after four.
+    const outSp = Math.min(17, k === 1 ? sp * 1.25 + 2 : k === 2 ? sp * 1.1 + 2 : sp * 0.85);
+    return { vx: rx / rl * outSp, vz: rz / rl * outSp, nx: r2(nx), nz: r2(nz), sp: outSp };
+  }
+  boing(tx, tz, out, chain) {
+    // A dismembered body hits a cap as five pieces at once: one BOING, not five.
+    const key = tz * this.map.w + tx, last = (this.bumpedAt ??= new Map()).get(key);
+    if (last != null && this.time - last < 0.25) return;
+    this.bumpedAt.set(key, this.time);
+    this.telemetry.bump();
+    this.fx('bmp', { tx, tz, nx: out.nx, nz: out.nz, p: Math.round(out.sp), c: chain });
+    this.say(chain >= 2 ? `BOING x${chain}!` : 'BOING!', tx + 0.5, 2.6, tz + 0.5, { cls: 'boing', scale: Math.min(1.8, 1 + (chain - 1) * 0.15), life: 1 });
+    this.loop.freeze(0.035);
+  }
+  bumpFx(d) {
+    bumpMushroom(this.levelMeshes, d.tx, d.tz, d.nx, d.nz, d.p);
+    this.sfx.play('boing', { pitch: Math.min(1.8, 0.9 + d.c * 0.12), gap: 0.05 });
+    this.gore.confettiBurst(d.tx + 0.5 + d.nx * 0.6, 1.9, d.tz + 0.5 + d.nz * 0.6, 8, 4, [0xffffff, 0xfff1a1, 0x9ff0d4]);
+    this.view.shake(0.12);
   }
   wallSlam(e, hit) {
     if (this.guest || (e.lastSlam != null && e.age - e.lastSlam < 0.3)) return;
@@ -979,7 +1049,10 @@ export class Game {
     this.lastRender = now;
     const frozen = this.loop.hitstop > 0;
     const sdt = frozen ? 0 : dt * this.loop.timeScale;
-    for (const e of this.world.entities) e.sync?.(sdt);
+    // A body killed outside world.update (a guest's killFx, a pending explosion) is still
+    // listed until the next update; posing it would drag its flung limbs back to the rig.
+    for (const e of this.world.entities) if (!e.dead) e.sync?.(sdt);
+    updateMushrooms(this.levelMeshes, sdt);
     if (this.slowmo > 0) { this.slowmo -= dt / this.loop.speed; this.loop.timeScale = this.net ? 1 : 0.3; }
     else this.loop.timeScale += (1 - this.loop.timeScale) * Math.min(1, dt * 4);
     // A ghost watches a living friend.

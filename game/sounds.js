@@ -9,6 +9,13 @@ export function defineSounds(s) {
   s.define('splat', (s, t) => s.noise(t, { dur: 0.3, vol: 0.4, f0: 600, f1: 80, q: 4, type: 'lowpass' }));
   s.define('thud', (s, t) => s.tone(t, { type: 'sine', f0: 140, f1: 45, dur: 0.12, vol: 0.3 }));
   s.define('bonk', (s, t, o) => { s.tone(t, { type: 'square', f0: 330 * P(o), f1: 90 * P(o), dur: 0.14, vol: 0.18 }); s.tone(t, { type: 'sine', f0: 1320 * P(o), dur: 0.25, vol: 0.12 }); });
+  // A spring, not a thud: the pitch climbs, then a second higher 'oing' rings on.
+  s.define('boing', (s, t, o) => {
+    s.tone(t, { type: 'sine', f0: 170 * P(o), f1: 620 * P(o), dur: 0.16, vol: 0.32 });
+    s.tone(t + 0.07, { type: 'sine', f0: 330 * P(o), f1: 990 * P(o), dur: 0.22, vol: 0.2 });
+    s.tone(t, { type: 'triangle', f0: 1318 * P(o), f1: 1760 * P(o), dur: 0.12, vol: 0.1 });
+    s.tone(t + 0.04, { type: 'sine', f0: 2637 * P(o), dur: 0.3, vol: 0.05 });
+  });
   s.define('slam', (s, t) => { s.tone(t, { type: 'sine', f0: 90, f1: 28, dur: 0.5, vol: 0.6 }); s.noise(t, { dur: 0.4, vol: 0.35, f0: 300, f1: 60, type: 'lowpass' }); });
   s.define('hurt', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 320, f1: 110, dur: 0.22, vol: 0.2 }); s.noise(t, { dur: 0.15, vol: 0.3, f0: 1200, f1: 300, type: 'lowpass' }); });
   s.define('dodge', (s, t) => s.noise(t, { dur: 0.18, vol: 0.15, f0: 400, f1: 2400, q: 1.5 }));
