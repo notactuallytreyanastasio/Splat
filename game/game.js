@@ -155,11 +155,15 @@ export class Game {
     this.level_ = run.level ?? 1; this.xp = run.xp ?? 0; this.gems = run.gems ?? 0;
     p.potions = run.potions ?? p.potions;
     p.hp = p.stats.maxHp;
+    this.owedBoons = 0; this.pendingBoons = run.owed ?? 0; // offered once the lap is under way
   }
   // What the next lap needs to rebuild this knight. Every peer saves its own.
   saveRunFor(lap) {
     const p = this.player, c = this.telemetry.c;
-    saveRun({ lap, boons: p.boons ?? [], level: this.level_, xp: this.xp, gems: this.gems, potions: p.potions,
+    // Boons earned but not picked: the Empress's 40 gems often level you up during her death
+    // scene, when no picker may open, or a co-op picker was still waiting at the win.
+    const owed = (this.owedBoons ?? 0) + (this.offers ? 1 : 0) + (this.queuedBoons ?? 0);
+    saveRun({ lap, boons: p.boons ?? [], owed, level: this.level_, xp: this.xp, gems: this.gems, potions: p.potions,
       kills: this.runTotals.kills + (this.squad?.k ?? c.kills), time: Math.round(this.runTotals.time + this.telemetry.t) });
   }
   // all -> sfx only -> silent. Remembered per browser.
@@ -1113,7 +1117,8 @@ export class Game {
   offerBoon() {
     // No boon picker over the Empress's death scene: it would pause the crown mid-air and
     // the end screen would land on top of it.
-    if (this.ending) return;
+    // The level still counts: the boon is owed, and paid on the next lap (laps.js).
+    if (this.ending) { this.owedBoons = (this.owedBoons ?? 0) + 1; return; }
     if (this.offers) { this.queuedBoons = (this.queuedBoons ?? 0) + 1; return; }
     this.offers = rollBoons(this.rng, 3);
     if (!this.net) this.state = 'boon';
@@ -1296,6 +1301,8 @@ export class Game {
     this.player.intent = this.intent;
     this.threat = this.incoming(this.player);
     if (this.pendingLevels) { this.pendingLevels--; this.levelUp(); }
+    // After the LAP card has gone (3.2 s + its exit), not on top of it.
+    if (this.pendingBoons && this.time > 3.8) { this.pendingBoons--; this.offerBoon(); }
     if (this.offers && this.intent.choose >= 0) this.chooseBoon(this.intent.choose);
     if (this.state === 'boon') { this.input.endStep(); this.touch.endStep(); return; }
     if (this.state === 'play') {
