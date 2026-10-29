@@ -136,7 +136,7 @@ const driveBass = (level, { wv = 'saw6', vol = 0.09, pattern = [0, 0, 7, 0, 12, 
   s.tone(t, { wave: wave(m, wv), f0: N(n), dur: spb * 1.7, attack: 0.004, vol, out });
 } });
 const kick = (level, steps, { bus, f0 = 130, vol = 0.38 } = {}) => ({ level, bus, play(s, t, step, ch, out) {
-  if (steps.includes(step)) s.tone(t, { type: 'sine', f0, f1: 45, dur: 0.17, vol, out });
+  if (steps.includes(step)) s.thump(t, { f0, f1: 45, dur: 0.17, vol, body: 0.35, out });
 } });
 const snare = (level, steps, { bus, f = 2000, vol = 0.16, dur = 0.12 } = {}) => ({ level, bus, play(s, t, step, ch, out) {
   if (!steps.includes(step)) return;
@@ -311,7 +311,7 @@ const timp = level => ({ level, send: haze, play(s, t, step, chord, out, spb, m,
   const last = info.bar === m.sec.bars.length - 1;
   if (!(step === 0 && info.bar % 2 === 0) && !(last && step >= 12)) return;
   const n = near(chord.r, 40);
-  s.tone(t, { type: 'sine', f0: N(n) * 1.06, f1: N(n), dur: last && step ? 0.25 : 0.7, vol: last && step ? 0.12 + (step - 12) * 0.03 : 0.26, out });
+  s.thump(t, { f0: N(n) * 1.06, f1: N(n), dur: last && step ? 0.25 : 0.7, vol: last && step ? 0.09 + (step - 12) * 0.025 : 0.19, body: 0.3, out });
 } });
 // Choir: the top of the chord an octave up, sung for the whole bar.
 const choir = level => ({ level, send: 0.7, play(s, t, step, chord, out, spb, m) {
@@ -373,7 +373,7 @@ export function defineMusic(m) {
       counter: melody(EG, EMPRESS_COUNTER, reed),
       harpsi: alberti((i, c, h) => 0.75 * EG(i, c, h), 1, { wv: 'harpsi', vol: 0.03, oct: 12, dur: 0.25 }),
       bassDrive: driveBass(EG, { pattern: [0, 0, 12, 0, 0, 0, 7, 12] }),
-      kick: kick((i, c, h) => 1 - ramp(h, 0.3, 0.7), [0, 4, 8, 12]),
+      kick: kick((i, c, h) => 1 - ramp(h, 0.3, 0.7), [0, 4, 8, 12], { vol: 0.24 }), // four on the floor: softer per hit than the garden's three
       snare: snare((i, c, h) => 0.9 * (1 - ramp(h, 0.22, 0.5)), [4, 12]),
       hats: hats((i, c, h) => 0.8 * (1 - ramp(h, 0.22, 0.5)), { 2: [0.05, 0.05], 6: [0.05, 0.05], 10: [0.05, 0.05], 14: [0.05, 0.05], 15: [0.03, 0.03] }),
       timp: timp(EG),
