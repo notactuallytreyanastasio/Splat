@@ -142,6 +142,7 @@ export class Hud {
   hideBoons() { this.$('.boons').classList.remove('on'); }
   showEnd(won) {
     const g = this.g, t = g.telemetry.summary();
+    if (g.guest && g.squad?.k != null) { t.kills = g.squad.k; t.maxChain = Math.max(t.maxChain, g.squad.ch ?? 0); }
     const { grade, score, parts } = gradeRun(t, won);
     // Bot, god-mode and skip-ahead runs are graded but never set records.
     const { old, next, broke } = recordBests(t, won, grade, !g.bot && !g.god && g.opts.start == null && !g.opts.boons);
@@ -171,6 +172,9 @@ export class Hud {
     </div>`;
     el.classList.toggle('won', won);
     el.classList.add('on');
+    // Off the battlefield: dropping 'playing' hides the touch pad (it sat on top of the
+    // button) and lifts touch-action:none, so a short phone can scroll the card.
+    document.body.classList.remove('playing');
     if (Object.values(broke).some(Boolean)) g.sfx.play('levelup');
     const again = el.querySelector('.again');
     if (again) again.onclick = () => { this.g.againTapped = true; };
