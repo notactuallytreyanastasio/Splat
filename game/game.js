@@ -112,7 +112,7 @@ export class Game {
     ]);
     this.coop = this.net ? new Coop(this, this.net) : null;
     this.bot = opts.bot ? new Bot(this, opts.botskill ?? 1) : null;
-    this.tutorial = opts.tutorial && !this.net ? new Tutorial(this, levelJson) : null;
+    this.tutorial = opts.tutorial && !this.net ? new Tutorial(this, levelJson, { first: opts.firstVisit }) : null;
     this.pause = new Pause(this);
     this.intent = emptyIntent();
     if (opts.start != null && !this.guest) this.skipToRoom(+opts.start);

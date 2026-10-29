@@ -116,9 +116,17 @@ const STEPS = [
 ];
 const PRAISE = ['NICE!', 'GORGEOUS!', 'SO PRETTY!', 'DELICIOUS!', 'PERFECT!', 'YES!', 'LOVELY!'];
 
+// Out to the title. Finishing, skipping or backing out all count as having seen the
+// tutorial, so a bare URL stops sending this browser here (main.js).
+function leave() {
+  try { localStorage.setItem('pgm.tutorial', '1'); } catch {}
+  location.search = '';
+}
+
 export class Tutorial {
-  constructor(game, json) {
+  constructor(game, json, { first = false } = {}) {
     this.game = game;
+    this.first = first; // sent here by a first visit, not by the How to play button
     const L = game.level, room = L.rooms[L.regionAt(Math.floor(L.start.x), Math.floor(L.start.z))];
     this.room = room;
     this.center = room.center;
@@ -152,12 +160,12 @@ export class Tutorial {
   intro(onStart) {
     const steps = STEPS.map(s => `<i title="${s.title}">${ICONS[s.icon]}</i>`).join('');
     this.modal(`<div class="badge">${ICONS.ladybug}</div><h1>HOW TO PLAY</h1>
-      <p>Eight little lessons in pretty violence. The bugs here hit softly and you cannot pop.</p>
+      <p>${this.first ? 'First time in the garden? ' : ''}Eight little lessons in pretty violence. The bugs here hit softly and you cannot pop.</p>
       <div class="lessons">${steps}</div>
       <div class="btns"><button class="go" type="button">let's squish</button></div>
-      <button class="back" type="button">back to the title</button>`, {
+      <button class="back" type="button">${this.first ? 'skip it, just play' : 'back to the title'}</button>`, {
       go: () => { this.closeModal(); onStart(); this.next(); },
-      back: () => { location.search = ''; },
+      back: () => leave(),
     });
   }
   modal(html, actions) {
@@ -182,7 +190,7 @@ export class Tutorial {
       <div class="tut-pips">${STEPS.map((_, k) => `<i class="${k < this.i ? 'on' : k === this.i ? 'now' : ''}"></i>`).join('')}</div>
       <button class="tut-skip" type="button">skip tutorial</button></div>`;
     this.card = this.root.firstChild;
-    this.card.querySelector('.tut-skip').onclick = e => { e.stopPropagation(); location.search = ''; };
+    this.card.querySelector('.tut-skip').onclick = e => { e.stopPropagation(); leave(); };
   }
   next() {
     this.i++;
@@ -221,7 +229,7 @@ export class Tutorial {
     this.modal(`<div class="badge">${ICONS.heart}</div><h1>YOU'RE READY</h1>
       <p>Anything you hit hard enough becomes a projectile. So do the bodies. Go make a mess.</p>
       <div class="btns"><button class="go" type="button">start a real run</button><button class="again" type="button">practice again</button></div>`, {
-      go: () => { location.search = ''; },
+      go: () => leave(),
       again: () => { location.reload(); },
     });
     this.modalEl.classList.add('win');

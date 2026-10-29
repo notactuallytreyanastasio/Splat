@@ -7,8 +7,13 @@ const status = msg => { const el = document.getElementById('hud'); el.innerHTML 
 const NAMES = ['Petal', 'Stinger', 'Gumdrop', 'Thimble', 'Mothball', 'Sprinkle', 'Bramble', 'Nectar', 'Pip', 'Clover'];
 
 const coop = q.get('coop');
-// ?tutorial: the How to play lessons on their own little lawn (solo only).
-const tutorial = q.has('tutorial') && !coop;
+// ?tutorial: the How to play lessons on their own little lawn (solo only). A first visit
+// with a bare URL (tracking tags aside) goes there too: nobody has finished, skipped or
+// left the tutorial in this browser, and there are no personal bests from a real run.
+const seen = (() => { try { return !!(localStorage.getItem('pgm.tutorial') || localStorage.getItem('pgm.bests')); } catch { return true; } })();
+const bare = [...q.keys()].every(k => k.startsWith('utm_') || k === 'fbclid' || k === 'ref');
+const firstVisit = bare && !seen;
+const tutorial = (q.has('tutorial') || firstVisit) && !coop;
 let level = tutorial ? 'tutorial' : q.get('level') || 'garden', seed = num('seed'), lap = num('lap'), net = null;
 if (coop) {
   // Co-op: join the room on the blog's Phoenix server. The earliest player hosts;
@@ -29,7 +34,7 @@ const json = level.startsWith('local:')
   : await (await fetch(`game/levels/${level}.json`, { cache: 'no-store' })).json();
 document.getElementById('hud').innerHTML = '';
 const game = new Game(document.getElementById('game'), json, {
-  seed, lap, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), tutorial, boons: q.get('boons'),
+  seed, lap, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), tutorial, firstVisit, boons: q.get('boons'),
 });
 // Debug/automation surface used by tools/playtest.mjs.
 window.__game = game;
