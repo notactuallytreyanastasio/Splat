@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pastel Garden Massacre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<style>
+  :root { --ink: #3a2346; --pink: #ff5fa2; --mint: #9ff0d4; --lilac: #c8b2ff; --lemon: #fff1a1; --cream: #fffbff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #ffe9f6; font-family: Fredoka, 'Arial Rounded MT Bold', system-ui, sans-serif; color: var(--ink); user-select: none; }
+  #game { position: fixed; inset: 0; cursor: crosshair; }
+  #hud, #floaters { position: fixed; inset: 0; pointer-events: none; }
+  .floater { position: absolute; left: 0; top: 0; font-weight: 700; font-size: 22px; color: #fff; white-space: nowrap;
+    -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; will-change: transform; }
+  .floater.crit { color: var(--lemon); font-size: 30px; }
+  .floater.hurt { color: #ff3b6b; }
+  .floater.heal { color: var(--mint); }
+  .floater.impact { color: #ffb0d6; }
+  .floater.bonk, .floater.splat { color: var(--pink); font-size: 26px; letter-spacing: 1px; }
+  .floater.pinball { color: var(--lemon); font-size: 34px; letter-spacing: 1px; }
+
+  .orb { position: absolute; bottom: 18px; width: 118px; height: 118px; border-radius: 50%; border: 6px solid var(--ink); overflow: hidden;
+    background: #fff6fb; box-shadow: 0 6px 0 var(--ink), inset 0 -10px 0 rgba(58,35,70,.12); }
+  .orb .fill { position: absolute; left: 0; right: 0; bottom: 0; transition: height .15s; }
+  .orb span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; font-weight: 700; color: #fff; -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .orb::after { content: ''; position: absolute; left: 18%; top: 12%; width: 34%; height: 22%; border-radius: 50%; background: rgba(255,255,255,.65); transform: rotate(-25deg); }
+  .orb.hp { left: 20px; } .orb.hp .fill { background: linear-gradient(#ff8fbf, #ff3b7f); }
+  .orb.rage { right: 20px; } .orb.rage .fill { background: linear-gradient(#e2d4ff, #a98bff); }
+  .orb.rage.full { animation: throb .5s infinite alternate; } .orb.rage.full .fill { background: linear-gradient(90deg,#ff9ecb,#ffc3a0,#fff1a1,#9ff0d4,#a6dcff,#c8b2ff); background-size: 300% 100%; animation: rainbow 1s linear infinite; }
+  @keyframes throb { to { transform: scale(1.07); } } @keyframes rainbow { to { background-position: 300% 0; } }
+  .xp { position: absolute; left: 160px; right: 160px; bottom: 26px; height: 18px; border: 4px solid var(--ink); border-radius: 12px; background: #fff6fb; overflow: hidden; }
+  .xp .fill { height: 100%; background: linear-gradient(90deg, var(--mint), #a6dcff); transition: width .2s; }
+  .xp .lvl { position: absolute; left: 50%; top: -3px; transform: translateX(-50%); font-size: 15px; color: #fff; -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  .potions { position: absolute; left: 150px; bottom: 52px; font-size: 28px; color: var(--pink); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; letter-spacing: 2px; }
+  .gems { position: absolute; right: 152px; bottom: 54px; font-size: 22px; font-weight: 700; color: var(--lemon); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  .streak { position: absolute; right: 30px; top: 90px; text-align: right; opacity: 0; transition: opacity .3s; }
+  .streak.on { opacity: 1; } .streak.pop { animation: pop .3s; }
+  .streak b { display: block; font-size: 40px; color: var(--pink); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }
+  .streak i { display: block; font-style: normal; font-size: 26px; color: var(--lemon); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  @keyframes pop { 0% { transform: scale(1.6) rotate(-6deg); } 100% { transform: scale(1); } }
+  .banner { position: absolute; top: 16%; left: 0; right: 0; text-align: center; opacity: 0; transition: opacity .4s; }
+  .banner.on { opacity: 1; } .banner.pop { animation: pop .35s; }
+  .banner h1 { margin: 0; font-size: 64px; color: #fff; -webkit-text-stroke: 9px var(--ink); paint-order: stroke fill; letter-spacing: 2px; }
+  .banner h2 { margin: 0; font-size: 26px; color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .boss { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: min(640px, 70vw); text-align: center; opacity: 0; transition: opacity .4s; }
+  .boss.on { opacity: 1; }
+  .boss label { font-size: 22px; font-weight: 700; color: var(--mint); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; letter-spacing: 3px; }
+  .boss .bar { height: 22px; border: 5px solid var(--ink); border-radius: 14px; background: #fff6fb; overflow: hidden; margin-top: 2px; box-shadow: 0 4px 0 var(--ink); }
+  .boss .fill { height: 100%; background: linear-gradient(90deg,#ff9ecb,#ffc3a0,#fff1a1,#9ff0d4,#a6dcff,#c8b2ff); transition: width .2s; }
+  .boons, .end { position: absolute; inset: 0; display: none; place-content: center; text-align: center; background: rgba(255, 233, 246, .72); backdrop-filter: blur(4px); pointer-events: auto; }
+  .boons.on, .end.on { display: grid; }
+  .boons h1, .end h1 { margin: 0 0 18px; font-size: 56px; color: #fff; -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill; }
+  .boons .cards { display: flex; gap: 20px; justify-content: center; }
+  .boons button { width: 210px; padding: 18px 14px 20px; border: 6px solid var(--ink); border-radius: 22px; background: var(--cream); font: inherit; color: var(--ink); cursor: pointer;
+    box-shadow: 0 8px 0 var(--ink); position: relative; transition: transform .1s; }
+  .boons button:nth-child(1) { background: #ffe3ee; } .boons button:nth-child(2) { background: #dcfaec; } .boons button:nth-child(3) { background: #ece3ff; }
+  .boons button:hover { transform: translateY(-6px) rotate(-1deg); }
+  .boons em { position: absolute; top: -18px; left: -14px; width: 40px; height: 40px; border-radius: 50%; background: var(--pink); color: #fff; border: 4px solid var(--ink); font-style: normal; font-weight: 700; display: grid; place-items: center; }
+  .boons .icon { display: block; font-size: 44px; } .boons b { display: block; font-size: 22px; margin: 6px 0; } .boons small { font-size: 16px; }
+  .boons p, .end p { font-size: 20px; font-weight: 700; }
+  .end .stats { display: grid; grid-template-columns: repeat(4, 150px); gap: 12px; justify-content: center; }
+  .end .stats div { background: var(--cream); border: 5px solid var(--ink); border-radius: 18px; padding: 10px; box-shadow: 0 6px 0 var(--ink); font-size: 15px; }
+  .end .stats b { display: block; font-size: 30px; color: var(--pink); }
+  .vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 30, 90, .55)); }
+  .vignette.low { animation: lowhp 1s infinite; }
+  @keyframes lowhp { 50% { box-shadow: inset 0 0 120px rgba(255,30,90,.5); } }
+  .title { position: absolute; inset: 0; display: none; place-content: center; text-align: center; background: radial-gradient(circle, rgba(255,246,251,.85), rgba(255,214,232,.92)); pointer-events: auto; }
+  .title.on { display: grid; }
+  .title h1 { margin: 0; font-size: 84px; line-height: .95; color: #fff; -webkit-text-stroke: 11px var(--ink); paint-order: stroke fill; letter-spacing: 2px; transform: rotate(-3deg); }
+  .title h2 { margin: 14px 0 22px; font-size: 26px; color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .title .keys { max-width: 640px; margin: 0 auto; font-size: 17px; line-height: 2.1; }
+  .title .keys b { display: inline-block; padding: 0 9px; margin: 0 2px 0 10px; border: 3px solid var(--ink); border-radius: 8px; background: #fff; box-shadow: 0 3px 0 var(--ink); }
+  .title .tip { font-size: 18px; font-weight: 700; color: var(--ink); }
+  .title button { justify-self: center; margin-top: 8px; padding: 14px 30px; font: 700 26px Fredoka, system-ui; color: #fff; background: var(--pink); border: 6px solid var(--ink); border-radius: 22px; box-shadow: 0 8px 0 var(--ink); cursor: pointer; animation: throb .7s infinite alternate; }
+  .title small { margin-top: 12px; opacity: .6; }
+  .help { position: absolute; top: 10px; left: 12px; font-size: 13px; opacity: .7; font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="floaters"></div>
+<div id="hud"></div>
+<script type="module" src="./game/main.js"></script>
+</body>
+</html>

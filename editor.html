@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Garden Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<style>
+  :root { --ink: #3a2346; }
+  body { margin: 0; display: grid; grid-template-columns: 250px 1fr 280px; height: 100vh; font: 14px Fredoka, system-ui, sans-serif; color: var(--ink); background: #ffe9f6; }
+  aside { padding: 12px; overflow: auto; border-right: 4px solid var(--ink); background: #fff6fb; }
+  aside.right { border-right: 0; border-left: 4px solid var(--ink); }
+  h2 { margin: 12px 0 6px; font-size: 16px; }
+  .pal button, .tools button, .act button { display: flex; align-items: center; gap: 8px; width: 100%; margin: 3px 0; padding: 5px 8px; border: 3px solid var(--ink); border-radius: 10px; background: #fff; font: inherit; cursor: pointer; text-align: left; }
+  .pal button.on, .tools button.on { background: #ffd6e8; box-shadow: 0 3px 0 var(--ink); }
+  .sw { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--ink); display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+  kbd { margin-left: auto; font-size: 11px; opacity: .6; }
+  main { overflow: auto; position: relative; }
+  canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  .row { display: flex; gap: 6px; } .row > * { flex: 1; }
+  input, select { width: 100%; padding: 5px; border: 3px solid var(--ink); border-radius: 8px; font: inherit; box-sizing: border-box; }
+  #issues div { padding: 4px 6px; margin: 3px 0; border-radius: 6px; background: #fff; border-left: 5px solid #8fd4a4; }
+  #issues div.bad { border-left-color: #ff3b6b; } #issues div.warn { border-left-color: #ffc94d; }
+  #status { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 4px 12px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<aside>
+  <h2>Level</h2>
+  <div class="row"><select id="levels"></select></div>
+  <div class="row" style="margin-top:6px"><input id="name" placeholder="name"><input id="size" placeholder="WxH" style="max-width:70px"></div>
+  <div class="act">
+    <button id="new">New blank level</button>
+    <button id="save">Save to game/levels</button>
+    <button id="download">Download JSON</button>
+    <button id="play">Play draft ▶</button>
+    <button id="bot">Watch bot play draft 🤖</button>
+  </div>
+  <h2>Tools</h2>
+  <div class="tools" id="tools"></div>
+  <h2>Overlay</h2>
+  <label><input type="checkbox" id="overlay" checked style="width:auto"> room colours</label>
+</aside>
+<main><canvas id="c"></canvas></main>
+<aside class="right">
+  <h2>Palette <small>(type the character)</small></h2>
+  <div class="pal" id="pal"></div>
+  <h2>Validation</h2>
+  <div id="issues"></div>
+</aside>
+<div id="status">ready</div>
+<script type="module">
+import { LEGEND, parseLevel } from './game/level.js';
+
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d');
+let rows = [], name = 'draft', brush = '#', tool = 'brush', cell = 18, undo = [], redo = [], drag = null, hover = null;
+const TOOLS = { brush: 'Brush (B)', rect: 'Rectangle (R)', room: 'Carve room (C)', fill: 'Flood fill (F)', pick: 'Eyedropper (I)' };
+
+function status(s) { $('status').textContent = s; }
+function snapshot() { undo.push(rows.slice()); if (undo.length > 200) undo.shift(); redo = []; }
+function setCell(x, z, ch) {
+  if (z < 0 || x < 0) return;
+  while (rows.length <= z) rows.push('');
+  const r = rows[z].padEnd(x + 1, ' ');
+  rows[z] = r.slice(0, x) + ch + r.slice(x + 1);
+}
+const at = (x, z) => rows[z]?.[x] ?? ' ';
+function load(json, n) { rows = json.rows.slice(); name = n; $('name').value = n; undo = []; redo = []; changed(); }
+function json() { return { name: $('name').value || name, rows: rows.map(r => r.replace(/\s+$/, '')) }; }
+function changed() {
+  localStorage.setItem('level:' + ($('name').value || name), JSON.stringify(json()));
+  validate(); draw();
+}
+
+// ---- drawing
+let regionAt = () => -1;
+function draw() {
+  const w = Math.max(...rows.map(r => r.length), 10), h = Math.max(rows.length, 10);
+  cv.width = (w + 2) * cell; cv.height = (h + 2) * cell;
+  ctx.fillStyle = '#ffe9f6'; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (let z = 0; z < h; z++) for (let x = 0; x < w; x++) {
+    const ch = at(x, z), L = LEGEND[ch] ?? { color: '#f00' };
+    let col = L.color;
+    if (!L.spawn && !'#o*+, '.includes(ch)) col = '#fff4f8';
+    ctx.fillStyle = L.spawn ? '#fff4f8' : col;
+    if (ch === ' ') ctx.fillStyle = '#e7d8ec';
+    ctx.fillRect(x * cell, z * cell, cell, cell);
+    if ($('overlay').checked && ch !== '#' && ch !== ' ') {
+      const r = regionAt(x, z);
+      if (r >= 0) { ctx.fillStyle = `hsla(${(r * 67) % 360},80%,70%,.28)`; ctx.fillRect(x * cell, z * cell, cell, cell); }
+    }
+    if (L.spawn || ch === 'o' || ch === '*') {
+      ctx.fillStyle = L.color; ctx.strokeStyle = '#3a2346'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x * cell + cell / 2, z * cell + cell / 2, cell * 0.38, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#3a2346'; ctx.font = `bold ${cell * 0.55}px Fredoka`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(ch, x * cell + cell / 2, z * cell + cell / 2 + 1);
+    }
+  }
+  ctx.strokeStyle = 'rgba(58,35,70,.08)'; ctx.lineWidth = 1;
+  for (let x = 0; x <= w; x++) { ctx.beginPath(); ctx.moveTo(x * cell + .5, 0); ctx.lineTo(x * cell + .5, h * cell); ctx.stroke(); }
+  for (let z = 0; z <= h; z++) { ctx.beginPath(); ctx.moveTo(0, z * cell + .5); ctx.lineTo(w * cell, z * cell + .5); ctx.stroke(); }
+  if (drag && (tool === 'rect' || tool === 'room')) {
+    const [x0, z0, x1, z1] = norm(drag.x0, drag.z0, drag.x1, drag.z1);
+    ctx.strokeStyle = '#ff5fa2'; ctx.lineWidth = 3; ctx.strokeRect(x0 * cell, z0 * cell, (x1 - x0 + 1) * cell, (z1 - z0 + 1) * cell);
+  }
+  if (hover) { ctx.strokeStyle = '#3a2346'; ctx.lineWidth = 2; ctx.strokeRect(hover.x * cell + 1, hover.z * cell + 1, cell - 2, cell - 2); }
+}
+const norm = (a, b, c, d) => [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)];
+
+// ---- validation: uses the game's own parser, so editor and game cannot disagree
+function validate() {
+  const out = [];
+  const add = (cls, msg) => out.push(`<div class="${cls}">${msg}</div>`);
+  try {
+    const L = parseLevel(json());
+    regionAt = L.regionAt;
+    const starts = rows.join('').split('@').length - 1;
+    if (starts !== 1) add('bad', `${starts} player starts (need exactly 1 '@')`);
+    const combat = L.rooms.filter(r => r.combat);
+    add('', `${L.rooms.length} regions, ${combat.length} combat rooms, ${L.doors.length} gates`);
+    if (!L.rooms.some(r => r.boss)) add('warn', 'no boss (M) — level ends never');
+    for (const d of L.doors) if (d.rooms.length !== 2) add('bad', `gate at ${d.tx},${d.tz} touches ${d.rooms.length} regions (should be 2)`);
+    if (L.start) {
+      const start = L.regionAt(Math.floor(L.start.x), Math.floor(L.start.z)), seen = new Set([start]), q = [start];
+      while (q.length) { const r = q.shift(); for (const d of L.rooms[r]?.doors ?? []) for (const n of d.rooms) if (!seen.has(n)) { seen.add(n); q.push(n); } }
+      for (const r of L.rooms) if (!seen.has(r.id) && r.tiles.length > 1) add('bad', `region ${r.id} (${r.tiles.length} tiles) unreachable from start`);
+    }
+    for (const r of combat) {
+      const counts = {};
+      for (const s of r.spawns) counts[s.type] = (counts[s.type] ?? 0) + 1;
+      add('', `<b style="color:hsl(${(r.id * 67) % 360},60%,45%)">room ${r.id}</b> ${r.tiles.length} tiles · ${Object.entries(counts).map(([k, v]) => v + ' ' + k).join(', ')}`);
+      if (r.doors.length === 0) add('warn', `room ${r.id} has no gates`);
+    }
+  } catch (e) { add('bad', 'parse failed: ' + e.message); }
+  $('issues').innerHTML = out.join('');
+}
+
+// ---- tools
+function flood(x, z, ch) {
+  const from = at(x, z);
+  if (from === ch) return;
+  const st = [[x, z]], seen = new Set();
+  while (st.length) {
+    const [cx, cz] = st.pop(), k = cx + ',' + cz;
+    if (seen.has(k) || cx < 0 || cz < 0 || cz > 300 || cx > 300 || at(cx, cz) !== from) continue;
+    seen.add(k); setCell(cx, cz, ch);
+    st.push([cx + 1, cz], [cx - 1, cz], [cx, cz + 1], [cx, cz - 1]);
+  }
+}
+function carve(x0, z0, x1, z1) {
+  for (let z = z0 - 1; z <= z1 + 1; z++) for (let x = x0 - 1; x <= x1 + 1; x++) {
+    if (x < 0 || z < 0) continue;
+    const inside = x >= x0 && x <= x1 && z >= z0 && z <= z1;
+    if (inside) setCell(x, z, '.');
+    else if (at(x, z) === ' ') setCell(x, z, '#');
+    else if (at(x, z) === '#' && false) {}
+  }
+}
+const cellAt = e => { const r = cv.getBoundingClientRect(); return { x: Math.floor((e.clientX - r.left) / cell), z: Math.floor((e.clientY - r.top) / cell) }; };
+cv.addEventListener('mousedown', e => {
+  const { x, z } = cellAt(e), ch = e.button === 2 ? (at(x, z) === '.' ? ' ' : '.') : brush;
+  if (tool === 'pick') { selectBrush(at(x, z)); return; }
+  snapshot();
+  if (tool === 'fill') { flood(x, z, ch); changed(); return; }
+  drag = { x0: x, z0: z, x1: x, z1: z, ch };
+  if (tool === 'brush') { setCell(x, z, ch); changed(); }
+});
+cv.addEventListener('mousemove', e => {
+  const { x, z } = cellAt(e);
+  hover = { x, z };
+  status(`${x},${z}  ${LEGEND[at(x, z)]?.name ?? '?'}  ·  ${tool}  ·  brush '${brush}'`);
+  if (drag) { drag.x1 = x; drag.z1 = z; if (tool === 'brush') { setCell(x, z, drag.ch); changed(); return; } }
+  draw();
+});
+addEventListener('mouseup', () => {
+  if (!drag) return;
+  const [x0, z0, x1, z1] = norm(drag.x0, drag.z0, drag.x1, drag.z1);
+  if (tool === 'rect') for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) setCell(x, z, drag.ch);
+  if (tool === 'room') carve(x0, z0, x1, z1);
+  drag = null; changed();
+});
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); cell = Math.max(6, Math.min(40, cell - Math.sign(e.deltaY) * 2)); draw(); }, { passive: false });
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); const s = e.shiftKey ? redo.pop() : undo.pop(); if (s) { (e.shiftKey ? undo : redo).push(rows.slice()); rows = s; changed(); } return; }
+  const t = { b: 'brush', r: 'rect', c: 'room', f: 'fill', i: 'pick' }[e.key.toLowerCase()];
+  if (t && !LEGEND[e.key]) { selectTool(t); return; }
+  if (LEGEND[e.key] && e.key !== ' ') selectBrush(e.key);
+});
+
+function selectBrush(ch) { brush = ch; document.querySelectorAll('.pal button').forEach(b => b.classList.toggle('on', b.dataset.ch === ch)); if (tool === 'pick' || tool === 'room') selectTool('brush'); }
+function selectTool(t) { tool = t; document.querySelectorAll('.tools button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); }
+$('pal').innerHTML = Object.entries(LEGEND).map(([ch, L]) => `<button data-ch="${ch}"><span class="sw" style="background:${L.color}">${ch === ' ' ? '' : ch}</span>${L.name}<kbd>${ch === ' ' ? 'rmb' : ch}</kbd></button>`).join('');
+$('pal').onclick = e => { const b = e.target.closest('button'); if (b) selectBrush(b.dataset.ch); };
+$('tools').innerHTML = Object.entries(TOOLS).map(([t, n]) => `<button data-t="${t}">${n}</button>`).join('');
+$('tools').onclick = e => { const b = e.target.closest('button'); if (b) selectTool(b.dataset.t); };
+$('overlay').onchange = draw;
+$('name').onchange = changed;
+
+// ---- file actions
+async function list() {
+  try {
+    const names = await (await fetch('/api/levels')).json();
+    $('levels').innerHTML = names.map(n => `<option>${n}</option>`).join('');
+  } catch { $('levels').innerHTML = '<option>garden</option>'; }
+}
+$('levels').onchange = async () => { const n = $('levels').value; load(await (await fetch(`game/levels/${n}.json`, { cache: 'no-store' })).json(), n); };
+$('new').onclick = () => {
+  const [w, h] = ($('size').value || '40x30').split('x').map(Number);
+  snapshot(); rows = Array.from({ length: h }, () => ' '.repeat(w));
+  name = 'untitled'; $('name').value = name; changed();
+};
+$('save').onclick = async () => {
+  const n = $('name').value || name;
+  const r = await fetch('/api/levels/' + n, { method: 'POST', body: JSON.stringify(json(), null, 1) }).catch(() => null);
+  status(r?.ok ? `saved game/levels/${n}.json` : 'no save API here (static host?) — use Download');
+  list();
+};
+$('download').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(json(), null, 1)], { type: 'application/json' }));
+  a.download = ($('name').value || name) + '.json'; a.click();
+};
+$('play').onclick = () => { changed(); open(`./?level=local:${encodeURIComponent($('name').value || name)}`, '_blank'); };
+$('bot').onclick = () => { changed(); open(`./?level=local:${encodeURIComponent($('name').value || name)}&bot=1`, '_blank'); };
+
+selectTool('brush'); selectBrush('#');
+await list();
+load(await (await fetch('game/levels/garden.json', { cache: 'no-store' })).json(), 'garden');
+</script>
+</body>
+</html>
