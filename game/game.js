@@ -161,7 +161,7 @@ export class Game {
       case 'cf': return this.gore.confettiBurst(d.x, d.y, d.z, d.n, d.p, d.c);
       case 'sp': return this.gore.spray(d.x, d.y, d.z, d.dx, d.dz, d.n, d.p, d.c);
       case 'dc': return this.gore.decals.splat(d.x, d.z, d.r, d.c);
-      case 'ws': return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
+      case 'ws': this.addHeat(0.08); return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
       case 'pf': return this.gore.puff(d.x, d.y, d.z, d.c);
       case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d);
       case 'tl': return this.telegraphLine_(d.x, d.z, d.dx, d.dz, d.l, d.w, d.d);
@@ -364,6 +364,7 @@ export class Game {
     const mine = !this.net || d.src === this.localId;
     const info = { amount: d.a, dirX: d.dx, dirZ: d.dz, knock: d.k, kind: d.kind, crit: !!d.c };
     if (this.guest) t.flash = 1;
+    this.addHeat(0.012 + d.a * 0.0006 + (d.kind === 'impact' ? 0.04 : 0));
     this.gore.hit(t, info);
     const big = BIG[d.kind];
     // Hitstop freezes the whole simulation, so in co-op only your own blows stop time.
@@ -430,6 +431,7 @@ export class Game {
     const t = this.world.byId.get(d.id);
     if (!t || !t.rig) return;
     this.bodyCount = (this.bodyCount ?? 0) + 1;
+    this.addHeat(d.o ? 0.2 : 0.14);
     t.dead = true;
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
@@ -928,12 +930,20 @@ export class Game {
   }
   // Every kill drains a little color from the world you see. Full rage (and the blender)
   // is noir: black and white, blood still red, the band muffled like an old record.
+  // Combat heat: kills, hits, chains and splats pile it on; a second of calm and it drains
+  // fast. The world is colorful by default, loses color as a fight heats up, and goes noir
+  // at the peak (and through the blender). Dead bugs stay grey either way.
+  addHeat(v) { this.heat = Math.min(1.3, (this.heat ?? 0) + v); this.heatT = 0; }
   updateGrade(dt) {
     const g = this.view.grade, p = this.player;
-    const sat = Math.max(0.15, 1 - (this.bodyCount ?? 0) / 85);
-    const noir = this.state === 'play' && !p.ghost && (p.rage >= 100 || p.state === 'whirl') ? 1 : 0;
-    g.sat += (sat - g.sat) * Math.min(1, dt * 1.5);
-    g.noir += (noir - g.noir) * Math.min(1, dt * (noir ? 5 : 2));
+    this.heatT = (this.heatT ?? 0) + dt;
+    this.heat = Math.max(0, (this.heat ?? 0) - dt * (this.heatT > 0.9 ? 0.5 : 0.06));
+    const sat = 1 - Math.min(1, this.heat) * 0.85;
+    if (this.heat >= 1) this.noirOn = true; else if (this.heat < 0.55) this.noirOn = false;
+    const noir = this.state === 'play' && !p.ghost && (this.noirOn || p.state === 'whirl') ? 1 : 0;
+    g.sat += (sat - g.sat) * Math.min(1, dt * (sat > g.sat ? 3 : 2));
+    g.noir += (noir - g.noir) * Math.min(1, dt * (noir ? 6 : 2.5));
+    if (this.state === 'play') { this.telemetry.c.noirTime = (this.telemetry.c.noirTime ?? 0) + (g.noir > 0.5 ? dt : 0); this.telemetry.c.satSum = (this.telemetry.c.satSum ?? 0) + g.sat * dt; }
     if (noir && !this.wasNoir) { this.sfx.play('noir'); this.view.kick(0.03); }
     this.wasNoir = noir;
     // The band follows the color: a drained world sounds muffled and warped, noir like an old record.

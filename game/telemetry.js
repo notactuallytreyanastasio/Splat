@@ -59,6 +59,7 @@ export class Telemetry {
       juicePerMin: +(this.juice / Math.max(1, this.t) * 60).toFixed(1),
       longestDry: +Math.max(this.longestDry, this.t - this.lastJuice).toFixed(1),
       lowestHp: +this.lowHp.toFixed(2),
+      noirShare: +((this.c.noirTime ?? 0) / Math.max(1, this.t)).toFixed(2), avgColor: +((this.c.satSum ?? 0) / Math.max(1, this.t)).toFixed(2),
       bestStreak: g.bestStreak, level: g.level_, boons: this.boons,
       gibs: g.gore.stats.gibs, droplets: g.gore.stats.droplets,
       rooms: this.rooms,
