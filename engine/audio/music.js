@@ -97,7 +97,14 @@ export class Music {
     this.toneHz = hz;
     this.tone.frequency.setTargetAtTime(hz, this.sfx.ctx.currentTime, 0.15);
   }
-  setVolume(v = this.volume) { this.volume = v; if (this.out) this.out.gain.setTargetAtTime(v * this.level * this.duck, this.sfx.ctx.currentTime, 0.2); }
+  // Also called every frame by the game: schedule only on a change.
+  setVolume(v = this.volume) {
+    this.volume = v;
+    const g = v * this.level * this.duck;
+    if (!this.out || g === this.outGain) return;
+    this.outGain = g;
+    this.out.gain.setTargetAtTime(g, this.sfx.ctx.currentTime, 0.2);
+  }
   start() {
     clearInterval(this.timer);
     this.timer = setInterval(() => this.pump(), 25);
@@ -165,6 +172,22 @@ export class Music {
     if (i >= list.length) return null;
     const b = list[i], steps = this.sec.steps ?? this.song.steps ?? 16;
     return Array.isArray(b) ? b[Math.min(b.length - 1, Math.floor(s * b.length / steps))] : b;
+  }
+  // For playing along: the time of the next unscheduled step that falls on a multiple of
+  // `div` steps, and how many steps ahead of the sequencer that is. A note scheduled there
+  // lands on the grid (about 0.12 s of look-ahead late, which is why the game plays an
+  // instant sound effect too).
+  grid(div = 1) {
+    let t = this.next, k = 0;
+    while ((this.step + k) % div) { t += this.spb; k++; }
+    return { t, k };
+  }
+  get spb() { return this.song ? 60 / (this.sec?.bpm ?? this.song.bpm) / 4 : 0.125; }
+  // The chord `k` steps after the next unscheduled one (the current chord past the
+  // section's end).
+  chordAhead(k) {
+    const steps = this.sec.steps ?? this.song.steps ?? 16, s = this.step + k;
+    return this.chordAt(Math.floor(s / steps), s % steps) ?? this.chordAt(0, Math.min(steps - 1, this.step));
   }
   pump() {
     const ctx = this.sfx.ctx;

@@ -16,6 +16,7 @@ import { FlowField } from '../engine/ai/flowfield.js';
 import { Sfx } from '../engine/audio/sfx.js';
 import { Music } from '../engine/audio/music.js';
 import { defineMusic } from './music.js';
+import { KillSong } from './killsong.js';
 import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
 import { disposeTree } from '../engine/render/dispose.js';
@@ -60,6 +61,7 @@ export class Game {
     this.sfx = new Sfx();
     defineSounds(this.sfx);
     this.music = new Music(this.sfx);
+    this.killSong = new KillSong(this.music); // every kill sings a note on the beat
     defineMusic(this.music);
     this.audioMode = (() => { try { return localStorage.getItem('audio') || 'all'; } catch { return 'all'; } })();
     const unlock = () => this.sfx.unlock();
@@ -202,7 +204,7 @@ export class Game {
     this.music.intensity += (target - this.music.intensity) * Math.min(1, dt * 1.5);
     // Combat heat (or the noir peak, which the blender reaches without heat) drives the machine.
     this.music.heat = this.state === 'play' ? Math.max(this.heat ?? 0, this.view.grade.noir * 1.1) : 0;
-    this.music.setVolume(this.state === 'dead' ? 0.12 : this.player.hp < this.player.stats.maxHp * 0.25 ? 0.22 : 0.32);
+    this.music.setVolume(this.state === 'dead' ? 0.16 : this.player.hp < this.player.stats.maxHp * 0.25 ? 0.29 : 0.42); // full is Music's default (0.42)
   }
   get players() { return [this.player, ...(this.coop?.remotes.values() ?? [])].filter(p => !p.dead); }
   nearestPlayer(x, z) {
@@ -559,6 +561,7 @@ export class Game {
     this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null, bowling: d.bw ?? 0 }, !!d.o);
     this.sfx.play('squish');
     this.sfx.play('squeak', { pitch: 0.8 + Math.random() * 0.6 });
+    if (this.audioMode === 'all') this.killSong.kill(!!d.o);
     if ((t.def?.mass ?? 1) >= 2 || t.elite) this.sfx.duck(0.45, 0.15, 0.5); // a big thing coming apart owns the moment
   }
   explode(x, z, r, dmg) {
@@ -1353,6 +1356,7 @@ export class Game {
     }
     this.coop?.update(dt);
     this.updateMusic(dt);
+    this.killSong.update(dt);
     this.gore.update(dt);
     this.juice.update(dt);
     this.streakT -= dt;

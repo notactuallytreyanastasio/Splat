@@ -20,6 +20,12 @@ const SCENES = {
   machine: { song: 'garden', seconds: 75, keys: [[0, { intensity: 1, heat: 1.3, color: 0.2 }]] },
   empress: { song: 'empress', seconds: 60, keys: [[0, { intensity: 1, heat: 0 }]] },
   victory: { song: 'victory', seconds: 22, keys: [[0, { intensity: 0, heat: 0 }]] },
+  // A fight with kills (killsong.js): singles, a spree, a blender pass, then a machine spree.
+  spree: { song: 'garden', seconds: 70, keys: [[0, { intensity: 1, heat: 0, color: 1 }], [30, { heat: 0.4, color: 0.8 }], [40, { heat: 1.2, color: 0.3 }], [70, { heat: 1.2 }]],
+    kills: [[4, 1], [6.5, 1], [9, 1], [12, 1], [12.6, 1], [13.1, 2], [13.9, 1], [14.5, 1], [15.2, 1], [16, 3], [16.8, 1], [17.5, 1],
+      [24, 8], [24.2, 6], [24.4, 10], [45, 1], [45.5, 1], [46, 2], [46.6, 1], [47.4, 1], [48, 3], [49, 1], [50, 1], [51, 2], [52, 1], [60, 12]] },
+  empressSpree: { song: 'empress', seconds: 30, keys: [[0, { intensity: 1, heat: 0 }]],
+    kills: [[3, 1], [4, 1], [5, 2], [6, 1], [7, 1], [8, 3], [9, 1], [15, 6], [16, 1], [17, 1], [18, 2]] },
 };
 const pick = process.argv.slice(2);
 const scenes = pick.length ? Object.fromEntries(pick.map(k => { if (!SCENES[k]) throw new Error(`score: no scene ${k}`); return [k, SCENES[k]]; })) : SCENES;
@@ -43,6 +49,7 @@ for (const [name, sc] of Object.entries(scenes)) {
     const { defineSounds } = await import('/game/sounds.js');
     const { Music } = await import('/engine/audio/music.js');
     const { defineMusic } = await import('/game/music.js');
+    const { KillSong } = await import('/game/killsong.js');
     const SR = 44100, ctx = new OfflineAudioContext(2, SR * sc.seconds, SR);
     const s = new Sfx(); defineSounds(s); s.attach(ctx);
     let now = 0;
@@ -66,6 +73,7 @@ for (const [name, sc] of Object.entries(scenes)) {
     };
     Object.assign(m, at(0));
     m.play(sc.song); clearInterval(m.timer);
+    const ks = new KillSong(m), kills = [...(sc.kills ?? [])];
     const sections = [];
     for (now = 0; now < sc.seconds - 0.3; now += 0.025) {
       const k = at(now);
@@ -73,6 +81,8 @@ for (const [name, sc] of Object.entries(scenes)) {
       // The game's tone filter follows color the same way (game.js updateGrade).
       m.setTone(2600 + k.color * k.color * 17400);
       const before = m.section;
+      while (kills.length && kills[0][0] <= now) { const [, n] = kills.shift(); for (let i = 0; i < n; i++) ks.kill(n > 2); }
+      ks.update(0.025);
       m.pump();
       if (m.section !== before || !sections.length) sections.push([+now.toFixed(2), m.section]);
     }
@@ -132,6 +142,8 @@ for (const [name, sc] of Object.entries(scenes)) {
     }
     g.fillStyle = '#fff'; g.font = '11px sans-serif';
     for (const [t, sec] of sections) { const x = t * colsPerSec; g.fillRect(x, 0, 1, rows); g.fillText(sec, x + 3, 12); }
+    g.fillStyle = '#ff5fa2';
+    for (const [t, n] of sc.kills ?? []) g.fillRect(t * colsPerSec, rows + 14, 2, 4 + n * 2);
     for (let s = 0; s < sc.seconds; s += 10) g.fillText(s + 's', s * colsPerSec + 2, rows + 10);
     const png = new Uint8Array(await (await cv.convertToBlob()).arrayBuffer());
     const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };

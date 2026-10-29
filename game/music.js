@@ -56,7 +56,7 @@ const line = (...bars) => bars.map(b => bar(b));
 // The pitch with class pc nearest to ref.
 const near = (pc, ref) => { const n = ref - ((ref - pc) % 12 + 12) % 12; return ref - n > 6 ? n + 12 : n; };
 // A loop note that would rub a semitone against the chord moves to the nearest chord tone.
-function fit(n, chord) {
+export function fit(n, chord) {
   const pcs = [...chord.v, chord.b].map(x => x % 12);
   if (!pcs.some(q => { const d = (n - q + 12) % 12; return d === 1 || d === 11; })) return n;
   let best = n, bd = 99;
@@ -406,10 +406,12 @@ const choir = level => ({ level, send: 0.7, play(s, t, step, chord, out, spb, m)
 
 export function defineMusic(m) {
   const G = (i, c, h) => 1 - ramp(h, 0.35, 0.95);
+  // A killing spree sings over the score (killsong.js): the tune steps back for it.
+  const tune = (i, c, h, mm) => G(i, c, h) * (1 - 0.6 * (mm.spree ?? 0));
   const drive = i => ramp(i, 0.4, 0.9);
 
   m.define('garden', {
-    bpm: 116, echo: 3,
+    bpm: 116, echo: 3, root: 65, scale: [0, 2, 4, 7, 9], // F major pentatonic, for the kills
     sections: {
       intro: { bars: [F, Bbma7, Gm7, C7], mix: { counter: 0, flute: 0, tick: 1 } },
       A: { bars: [F, Bbma7, Gm7, C7, F, Dm7, [Bb, C7], F], mix: { counter: 0, flute: 0.3, tick: 0.5 } },
@@ -425,10 +427,10 @@ export function defineMusic(m) {
     mix: { bell: 0.5 },
     tracks: {
       pad: pad((i, c, h) => (0.85 - 0.25 * i) * (1 - 0.6 * ramp(h, 0.3, 0.9))),
-      lead: melody(G, GARDEN_LEAD, musicBox, { pan: 0.12 }),
-      flute: melody(G, { ...GARDEN_LEAD, A2: line(...A_THEME, 'F5:8 r:8') }, flute, { pan: -0.22 }),
+      lead: melody(tune, GARDEN_LEAD, musicBox, { pan: 0.12 }),
+      flute: melody(tune, { ...GARDEN_LEAD, A2: line(...A_THEME, 'F5:8 r:8') }, flute, { pan: -0.22 }),
       counter: melody(G, GARDEN_COUNTER, reed, { pan: 0.3 }),
-      bell: bell(G, GARDEN_LEAD),
+      bell: bell(tune, GARDEN_LEAD),
       arp8: alberti((i, c, h) => (1 - drive(i)) * 0.9 * G(i, c, h), 2),
       arp16: alberti((i, c, h) => drive(i) * 0.8 * (1 - ramp(h, 0.3, 0.6)), 1, { vol: 0.034, dur: 0.35, soft: null }), // too short to darken: one oscillator a note
       tick: tick((i, c, h) => (1 - ramp(i, 0.3, 0.7)) * G(i, c, h)),
@@ -443,7 +445,7 @@ export function defineMusic(m) {
 
   const EG = (i, c, h) => 1 - ramp(h, 0.4, 0.95);
   m.define('empress', {
-    bpm: 132, echo: 3,
+    bpm: 132, echo: 3, root: 69, scale: [0, 3, 5, 7, 10], voice: 'harpsi', // A minor pentatonic
     sections: {
       E1: { bars: [Am, G_, F_, E_, Am, Dm_, E7, Am], mix: { counter: 0, choir: 0 } },
       E2: { bars: [Dm_, Am, F_, CE, DmL, BbN, E7L, E7L], mix: { counter: 0, choir: 1 } },
@@ -454,7 +456,7 @@ export function defineMusic(m) {
     route: router('EM'),
     tracks: {
       pad: pad((i, c, h) => 0.75 * (1 - 0.5 * ramp(h, 0.3, 0.9)), { wave: 'organ', vol: 0.03, attack: 0.15 }),
-      lead: melody(EG, EMPRESS_LEAD, brass),
+      lead: melody((i, c, h, mm) => EG(i, c, h) * (1 - 0.5 * (mm.spree ?? 0)), EMPRESS_LEAD, brass),
       counter: melody(EG, EMPRESS_COUNTER, reed, { pan: 0.3 }),
       harpsi: alberti((i, c, h) => 0.75 * EG(i, c, h), 1, { wv: 'harpsi', soft: null, vol: 0.03, oct: 12, dur: 0.25, human: false, pan: -0.2 }),
       bassDrive: driveBass(EG, { pattern: [0, 0, 12, 0, 0, 0, 7, 12] }),
@@ -469,7 +471,7 @@ export function defineMusic(m) {
 
   const FC = ch('F', 'C3', 'A3 C4 F4');
   m.define('victory', {
-    bpm: 100,
+    bpm: 100, root: 65, scale: [0, 2, 4, 7, 9],
     sections: {
       V: { bars: [F, Bb, [Gm7, C7], F, F, [Bb, Bbm], [FC, C7], F] },
     },
