@@ -72,9 +72,52 @@ stats, personal bests saved in your browser, and your build shown as cards.
 - Touch fixes: double-tap zoom, canvas sizing, and buttons hidden on the title
   screen.
 
+## Round two (later in the night)
+
+**Laps.** Winning no longer ends the run. "another lap" starts lap 2 of the same
+run, and you keep your boons, level and potions. Each lap the bugs get tougher,
+there are more elites and extra waves, and the garden changes its look: lap 2
+AFTER DARK (violet night), lap 3 SUGAR FROST (snow, where the blood reads
+best), lap 4 HARVEST MOON. The report card and personal bests track your
+deepest lap. A death still starts a fresh run. Try it at `/?lap=2`, but
+typing that starts the lap without a build and doesn't set records.
+
+**Pause and settings.** Escape, P, the drawn pause button or gamepad Start
+opens the menu. Solo, the game freezes. In co-op it opens without pausing, and
+the menu says so. Settings:
+- music and sound volume sliders
+- screen shake on or off
+- flashing and noir: full / soft / calm, for players sensitive to flashing
+- camera: near / normal / far
+
+They're saved in your browser. Solo also pauses when you switch away from the
+tab.
+
+**Audio mix.** Sound effects and music now run on separate buses, through a
+gentle "glue" compressor and a limiter, so a pile of gore can get loud without
+clipping. The music ducks under big moments: a big bug coming apart, boss
+hits, wall splats, parries. Each sound has a level trim, and a cap on
+overlapping copies stops a dozen squishes from stacking. Bass gets upper
+harmonics so phone speakers can play it. `node tools/mix.mjs` measures every
+sound and music mood offline. Still reasoned from meters, not ears; if splats
+feel too present, they're the first thing to trim.
+
+**QA sweep.** Many bot seeds and edge cases, with `playtest.mjs` now flagging
+stalls (no progress for N seconds) and broken positions. The tutorial's phone
+issues are fixed: the knight is framed under the card, the goal star starts on
+screen, and the FULL TANK message no longer collides with the blender banner.
+
+**Also fixed while merging:**
+- **Start hitch:** the first frame of play compiled about 30 shaders at once.
+  They're now compiled behind the title screen.
+- **Pause overlap:** banners printed through the pause menu ("THE
+  PAUSEDOYER").
+- **Two branches built different audio graphs:** I kept the mix graph and
+  wired the pause sliders into it.
+
 ## How it was built
 
-Six features ran in parallel in a workflow: one builder agent per feature,
+Round one ran six features in parallel in a workflow and round two ran four: one builder agent per feature,
 each in its own git worktree, then an independent reviewer per feature who
 played and tested the branch and fixed what was clearly broken. The music was
 a seventh agent. I merged the branches, resolved the conflicts, and re-tested
