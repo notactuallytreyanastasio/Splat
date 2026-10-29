@@ -175,6 +175,9 @@ export class Coop {
       if (k === 'E' || k === 'M') {
         const [, , , , , , f, spin, tumble, squash, lx, lz, action, ap, flash, flags, hp, carrier] = row;
         Object.assign(e, { tf: f, spinYaw: spin, tumble, squash, leanX: lx, leanZ: lz, action: action || null, actionP: ap, flash: Math.max(e.flash, flash), hp, active: !!(flags & 2), baby: !!(flags & 8), stun: flags & 16 ? 1 : 0 });
+        // The host scales hp (more knights, later laps); a proxy built from defaults must not
+        // show the Empress's bar stuck full for the first 1300 of a lap-3 1950.
+        if (hp > e.maxHp) e.maxHp = hp;
         if (!(flags & 4) && e.launchedFx) e.launchedFx = false;
         e.launchedFx = !!(flags & 4);
         const carriedBy = carrier ? this.player(carrier) : null;
