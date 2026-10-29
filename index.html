@@ -53,17 +53,19 @@
   .boss label { font-size: 22px; font-weight: 700; color: var(--mint); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; letter-spacing: 3px; }
   .boss .bar { height: 22px; border: 5px solid var(--ink); border-radius: 14px; background: #fff6fb; overflow: hidden; margin-top: 2px; box-shadow: 0 4px 0 var(--ink); }
   .boss .fill { height: 100%; background: linear-gradient(90deg,#ff9ecb,#ffc3a0,#fff1a1,#9ff0d4,#a6dcff,#c8b2ff); transition: width .2s; }
-  .boss label { display: inline-flex; align-items: center; gap: 8px; } .boss label svg { width: 30px; height: 22px; overflow: visible; }
+  .boss label { display: inline-flex; align-items: center; gap: 8px; } .boss label svg { width: 30px; height: 22px; overflow: visible; flex: none; } .boss label span { white-space: nowrap; }
+  @media (max-width: 480px) { .boss label svg { width: 20px; height: 15px; } .boss label { gap: 4px; letter-spacing: 1px; } }
   .boss .bar { position: relative; }
   .boss .notch { position: absolute; left: 50%; top: 0; bottom: 0; width: 5px; margin-left: -2px; background: var(--ink); }
   .boss.p2 .fill { background: linear-gradient(90deg,#ff1f5a,#ff5fa2,#ff9ecb); }
   .boss.p2 .bar { animation: bossthrob .45s infinite alternate; } .boss.p2 label { color: #ff9ecb; }
   @keyframes bossthrob { to { box-shadow: 0 4px 0 var(--ink), 0 0 18px #ff2d6f; } }
-  .bosscard { position: absolute; top: 58%; left: 0; right: 0; text-align: center; opacity: 0; pointer-events: none; }
-  .bosscard svg { display: block; width: clamp(90px, 15vw, 150px); margin: 0 auto -14px; position: relative; z-index: 1; overflow: visible; }
-  .bosscard .ribbon { display: inline-block; padding: 0 30px 4px; background: #c6f5d2; border: 6px solid var(--ink); border-radius: 20px; box-shadow: 0 8px 0 var(--ink); transform: rotate(-2deg); }
-  .bosscard h1 { margin: 0; font-size: clamp(32px, 7.5vw, 70px); color: #fff; -webkit-text-stroke: 10px var(--ink); paint-order: stroke fill; letter-spacing: 4px; }
-  .bosscard h2 { margin: 16px 0 0; font-size: clamp(16px, 3vw, 26px); color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .bosscard { position: absolute; bottom: 12vh; left: 0; right: 0; text-align: center; opacity: 0; pointer-events: none; }
+  .bosscard svg { display: block; width: clamp(60px, min(15vw, 22vh), 150px); margin: 0 auto -14px; position: relative; z-index: 1; overflow: visible; }
+  .bosscard .ribbon { display: inline-block; padding: 0 clamp(12px, 4vw, 30px) 4px; background: #c6f5d2; border: 6px solid var(--ink); border-radius: 20px; box-shadow: 0 8px 0 var(--ink); transform: rotate(-2deg); }
+  .bosscard h1 { margin: 0; font-size: clamp(22px, min(7vw, 8.5vh), 70px); color: #fff; -webkit-text-stroke: 10px var(--ink); paint-order: stroke fill; letter-spacing: clamp(1px, .5vw, 4px); white-space: nowrap; }
+  .bosscard h2 { margin: 16px 0 0; font-size: clamp(14px, min(3vw, 5vh), 26px); color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  @media (orientation: portrait) { .bosscard { bottom: 26vh; } } /* clear of the touch buttons */
   .bosscard.on { animation: cardin .5s cubic-bezier(.2, 1.7, .4, 1) forwards; } .bosscard.off { animation: cardout .35s ease-in forwards; }
   @keyframes cardin { from { opacity: 0; transform: scale(2.2) rotate(8deg); } to { opacity: 1; transform: none; } }
   @keyframes cardout { from { opacity: 1; } to { opacity: 0; transform: translateY(-30px) scale(.9); } }

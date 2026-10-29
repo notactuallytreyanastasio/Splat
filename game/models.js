@@ -352,7 +352,7 @@ export function mantis() {
   head.add(glow);
   // A throbbing red ring on the floor: phase two has to read from straight above too.
   const aura = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.7, 40), new THREE.MeshBasicMaterial({ color: 0xff1f5a, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
-  aura.rotation.x = -Math.PI / 2; aura.position.y = 0.06; aura.visible = false;
+  aura.rotation.x = -Math.PI / 2; aura.position.y = 0.06; aura.visible = false; aura.renderOrder = 2; // over the blood layer
   r.root.add(aura);
   const crown = joint(head, 0, 0.32, -0.02);
   k.part('cylinder', PAL.gold, { s: [0.5, 0.1, 0.36], parent: crown });

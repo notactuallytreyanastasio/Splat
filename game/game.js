@@ -130,7 +130,8 @@ export class Game {
     if (this.audioMode !== 'all' || !this.music.song) return;
     const room = this.level.rooms[this.currentRoom];
     const fighting = this.level.rooms.some(r => r.active);
-    const boss = this.boss && !this.boss.dead;
+    // Her tune holds through her death scene (the crown is out) until the fanfare.
+    const boss = (this.boss && !this.boss.dead) || this.trophies.length > 0;
     this.music.play(this.state === 'win' ? 'victory' : boss ? 'empress' : 'garden');
     const target = this.state === 'dead' ? 0 : fighting ? 1 : 0.15;
     this.music.intensity += (target - this.music.intensity) * Math.min(1, dt * 1.5);
@@ -306,7 +307,7 @@ export class Game {
     const alive = this.players.find(k => !k.ghost);
     for (const k of this.players) if (k.ghost && alive) this.fx('rez', { to: k.pid, x: alive.x + 0.8, z: alive.z });
     // The Empress gets her death scene before the curtain.
-    if (room.boss) { this.later(3.6, () => this.fx('win', {})); return; }
+    if (room.boss) { this.later(3.6, () => { if (this.state !== 'dead') this.fx('win', {}); }); return; }
     this.fx('bn', { t: 'CLEARED!', s: 'smack the cocoon for prizes' });
     const c = room.center;
     const tile = room.tiles.map(([x, z]) => ({ x: x + 0.5, z: z + 0.5 })).filter(t => !this.map.solidAt(t.x, t.z))
@@ -501,6 +502,8 @@ export class Game {
   // ------------------------------------------------------------------ enemy abilities
   telegraph(mesh, dur, update) {
     mesh.position.y = 0.04;
+    // Drawn after the blood layer (renderOrder 1): a warning under a puddle is no warning.
+    mesh.traverse(m => { m.renderOrder = 2; });
     this.scene.add(mesh);
     const t = { mesh, dur, t: 0, update };
     this.telegraphs.push(t);
@@ -646,7 +649,7 @@ export class Game {
     this.gore.spray(x, 2.4, z, 0, 0, 40, 6, [0xd4002e, 0x7dffc0]);
     for (const [r0, dur] of [[1.2, 0.45], [0.8, 0.6]]) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r0 + 0.25, 48), new THREE.MeshBasicMaterial({ color: 0xff2d6f, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.12, z);
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.12, z); ring.renderOrder = 2;
       this.scene.add(ring);
       this.slashes.push({ g: ring, t: 0, dur, ring: true });
     }
@@ -656,6 +659,7 @@ export class Game {
   bossDeathFx(t, d) {
     const r = t.rig;
     t.onRemove = () => {}; // the cinematic owns the rig now; it leaves the scene when it bursts
+    this.ending = true;
     this.loop.freeze(0.7);
     this.view.focusOn({ x: t.x, z: t.z }, { ease: 0.3, hold: 2, out: 0.7, zoom: 0.38, lift: 0.8 });
     this.hud.cinema(4.4);
@@ -720,7 +724,7 @@ export class Game {
           this.sfx.play('clink', { pitch: 0.8 + Math.min(1, -v.y / 14) * 0.6, gap: 0.04 });
           this.gore.confettiBurst(p.x, 0.2, p.z, 6, 2, [0xfff1a1, 0xffd66b]);
           v.y *= -0.55; v.x *= 0.78; v.z *= 0.78; c.spin *= 0.7; c.tumble *= 0.45;
-        } else { v.y = 0; v.x *= 0.9; v.z *= 0.9; }
+        } else { const f = Math.exp(-dt * 6.3); v.y = 0; v.x *= f; v.z *= f; } // 0.9 per frame at 60fps, at any fps
       }
       // Land upright: the tumble settles to the nearest full turn as it slows.
       if (p.y <= floor + 0.02 && Math.abs(v.y) < 1) { const up = Math.round(o.rotation.x / (Math.PI * 2)) * Math.PI * 2; o.rotation.x += (up - o.rotation.x) * Math.min(1, dt * 10); c.tumble *= Math.exp(-dt * 6); }
@@ -842,6 +846,9 @@ export class Game {
   }
   // Solo pauses for the pick; co-op cannot pause the world, so the cards wait while you fight.
   offerBoon() {
+    // No boon picker over the Empress's death scene: it would pause the crown mid-air and
+    // the end screen would land on top of it.
+    if (this.ending) return;
     if (this.offers) { this.queuedBoons = (this.queuedBoons ?? 0) + 1; return; }
     this.offers = rollBoons(this.rng, 3);
     if (!this.net) this.state = 'boon';
@@ -1092,7 +1099,7 @@ export class Game {
     const p = this.player.ghost ? (this.players.find(k => !k.ghost) ?? this.player) : this.player;
     this.fadeOccluders(dt, p);
     this.view.follow(p.x + p.aimX * 1.2, p.z + p.aimZ * 1.2, dt, 5);
-    if (!frozen) for (const t of this.timers.splice(0)) if ((t.t -= dt) <= 0) t.fn(); else this.timers.push(t);
+    if (!frozen && this.timers.length) for (const t of this.timers.splice(0)) if ((t.t -= dt) <= 0) t.fn(); else this.timers.push(t);
     this.view.update(dt);
     this.lights.follow(this.view.center.x, this.view.center.z);
     this.floaters.update(dt);
