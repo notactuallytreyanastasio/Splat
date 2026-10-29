@@ -104,6 +104,14 @@ const DRAW = {
   sticky: () => g('scale(1.3333)', `<g stroke-width="3.4"><circle cx="22" cy="28" r="15" fill="#ff5fa2"/><path d="M12 36 Q12 44 15 44 Q18 44 17 38" fill="#ff9ecb" stroke-width="3"/><ellipse cx="16" cy="22" rx="4" ry="2.5" fill="#fffbff" stroke="none"/><rect x="25" y="10" width="9" height="7" rx="2" fill="#c8b2ff" transform="rotate(35 29 13)"/><path d="M33 9 Q36 4 40 6"/><path d="M42 2 L43 7 L47 6 L43 9 L44 13 L41 10 L37 11 L40 8 Z" fill="#fff1a1" stroke-width="2"/></g>`),
   longarms: () => g('scale(1.3333)', `<g stroke-width="3.4"><path d="M3 38 Q18 38 26 22" stroke-width="10"/><path d="M3 38 Q18 38 26 22" stroke="#9ff0d4" stroke-width="4"/><circle cx="31" cy="15" r="8" fill="#9ff0d4"/><path d="M36 8 L42 3 M38 14 L45 12 M35 20 L41 24" stroke-width="4"/></g>`),
   bowling: () => g('scale(1.3333)', `<g stroke-width="3.4"><path d="M38 4 Q43 4 42 12 Q40 16 42 22 Q45 32 40 44 L34 44 Q30 32 34 22 Q36 16 34 12 Q33 4 38 4 Z" fill="#fffbff"/><path d="M34.5 14 L41.5 14" stroke="#ff5fa2" stroke-width="3"/><circle cx="19" cy="29" r="15" fill="#c8b2ff"/><circle cx="14" cy="24" r="2.2" fill="${INK}" stroke="none"/><circle cx="20" cy="21" r="2.2" fill="${INK}" stroke="none"/><circle cx="17" cy="30" r="2.2" fill="${INK}" stroke="none"/></g>`),
+  // Laps: a mint loop-the-loop arrow round a little pink pennant.
+  lap: () =>
+    `<path d="M45 17.5A20 20 0 1 0 52.5 31" stroke-width="12"/>
+     <path d="M45 17.5A20 20 0 1 0 52.5 31" stroke="${C.mint}" stroke-width="5"/>
+     <path d="M43 30L60 27.5L53 15Z" fill="${C.lemon}"/>
+     <path d="M26 46L26 20" stroke-width="5"/>
+     <path d="M26 21L41 26.5L26 32Z" fill="${C.hot}"/>
+     <circle cx="26" cy="19" r="2.8" fill="${C.lemon}" stroke-width="3"/>` + shine('M14 30Q15 23 20 19', 2.5),
   heart: () => `<path d="${heartPath}" fill="#ff7eb6"/>` + shine('M15 22Q17 16 23 16.5'),
   gem: () =>
     `<path d="M13 24L22 11L42 11L51 24L32 55Z" fill="${C.lemon}"/>

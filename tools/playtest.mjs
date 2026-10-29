@@ -1,4 +1,4 @@
-// Bot playtest: node tools/playtest.mjs [--seeds 1,2,3] [--speed 2] [--room N] [--timeout 240] [--every 4]
+// Bot playtest: node tools/playtest.mjs [--seeds 1,2,3] [--speed 2] [--room N] [--timeout 240] [--every 4] [--lap N]
 // Runs the real game headlessly with the autopilot, screenshots the moments that matter,
 // and writes tools/out/playtest/<seed>/{report.json, index.html} plus a combined summary.
 import fs from 'node:fs';
@@ -23,7 +23,7 @@ for (const seed of seeds) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message + '\n' + (e.stack ?? '')));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  const q = new URLSearchParams({ seed, speed, bot: 1, ...(args.start != null ? { start: args.start } : {}), ...(args.god ? { god: 1 } : {}), ...(args.skill ? { botskill: args.skill } : {}) });
+  const q = new URLSearchParams({ seed, speed, bot: 1, ...(args.start != null ? { start: args.start } : {}), ...(args.god ? { god: 1 } : {}), ...(args.lap ? { lap: args.lap } : {}), ...(args.skill ? { botskill: args.skill } : {}) });
   await page.goto(`${url}/?${q}`);
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   const shots = [];

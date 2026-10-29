@@ -54,6 +54,8 @@ export class Coop {
     if (this.isGuest && this.lastSnap && performance.now() - this.lastSnap > 6000 && !this.warned) { this.warned = true; g.hud.banner('HOST VANISHED', 'their garden, their rules', 4); }
   }
   broadcast(type, d) { if (this.isHost) this.outbox.push([type, d]); }
+  // Send queued events now, not at the next 15 Hz tick: used just before the host reloads.
+  flush() { if (this.isHost && this.outbox.length) { this.net.send('e', { l: this.outbox }); this.outbox = []; } }
 
   // ------------------------------------------------------------ own knight
   sendPlayer() {
@@ -149,7 +151,7 @@ export class Coop {
     }
     const L = g.level;
     return {
-      seed: g.seed, level: g.levelName, ents,
+      seed: g.seed, level: g.levelName, lap: g.lap, ents,
       doors: L.doors.map(d => (d.open ? 1 : 0)).join(''),
       rooms: L.rooms.map(r => (r.cleared ? 2 : r.active ? 1 : 0)).join(''),
       xp: g.xp, lvl: g.level_, gems: g.gems, boss: g.boss?.nid ?? 0,

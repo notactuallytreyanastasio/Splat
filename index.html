@@ -230,6 +230,34 @@
     .end .bc { padding: 2px 8px 2px 3px; font-size: 12px; } .end .bc svg { width: 22px; height: 22px; }
     .end p { position: sticky; bottom: 0; margin-top: 8px; padding: 14px 0 4px; background: linear-gradient(rgba(255,233,246,0), rgba(255,233,246,.96) 45%); } .end .again { min-height: 46px; font-size: 20px; padding: 6px 26px; }
   }
+  /* Laps (game/laps.js): a chip on the HUD from lap 2, a card when a lap starts, the lap
+     on the title screen and on the report card. */
+  .lapchip { position: absolute; left: 50%; bottom: 50px; transform: translateX(-50%) rotate(-2deg); display: none; align-items: center; gap: 4px; padding: 1px 12px 1px 4px; background: #fff6fb; border: 4px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); }
+  .lapchip.on { display: flex; }
+  .lapchip .ic { width: 26px; height: 26px; stroke-width: 6; }
+  .lapchip b { font-size: 16px; letter-spacing: 1px; color: var(--pink); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+  body.touching .lapchip { bottom: auto; top: calc(env(safe-area-inset-top) + 30px); }
+  body.noir #hud .lapchip { filter: grayscale(1) contrast(1.2); }
+  /* Low on the screen, like the boss card: the room banner up top often lands at the same moment. */
+  .lapcard { position: absolute; bottom: 17vh; left: 0; right: 0; text-align: center; opacity: 0; pointer-events: none; }
+  @media (orientation: portrait) { .lapcard { bottom: 30vh; } }
+  body[data-lap="dusk"] .help { color: #e9e2ff; }
+  .lapcard .no { display: inline-flex; align-items: center; gap: 6px; margin-bottom: -10px; position: relative; z-index: 1; transform: rotate(-4deg); }
+  .lapcard .no .ic { width: clamp(44px, 9vmin, 76px); height: clamp(44px, 9vmin, 76px); }
+  .lapcard .no b { font-size: clamp(40px, min(10vw, 12vh), 96px); line-height: 1; color: var(--lemon); -webkit-text-stroke: 11px var(--ink); paint-order: stroke fill; letter-spacing: 2px; }
+  .lapcard .ribbon { display: inline-block; padding: 2px clamp(12px, 4vw, 30px) 4px; background: #c8b2ff; border: 6px solid var(--ink); border-radius: 20px; box-shadow: 0 8px 0 var(--ink); transform: rotate(2deg); }
+  .lapcard h1 { margin: 0; font-size: clamp(20px, min(6vw, 7vh), 54px); color: #fff; -webkit-text-stroke: 9px var(--ink); paint-order: stroke fill; letter-spacing: clamp(1px, .5vw, 4px); white-space: nowrap; }
+  .lapcard h2 { margin: 16px 0 0; font-size: clamp(14px, min(3vw, 5vh), 24px); color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; }
+  .lapcard.on { animation: cardin .5s cubic-bezier(.2, 1.7, .4, 1) forwards; } .lapcard.off { animation: cardout .35s ease-in forwards; }
+  body[data-lap="frost"] .lapcard .ribbon { background: #a6dcff; } body[data-lap="harvest"] .lapcard .ribbon { background: #ffc3a0; }
+  .title.lap h1 { font-size: clamp(34px, min(9vw, 13vh), 76px); }
+  .title .lapno { display: inline-flex; align-items: center; gap: 8px; color: var(--lemon); }
+  .title .lapno .ic { width: .8em; height: .8em; stroke-width: 5; }
+  .title .tip b { color: var(--pink); }
+  .end .laptag { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 2px 12px 2px 4px; background: var(--ink); color: #fff; border-radius: 14px; font-weight: 700; transform: rotate(-3deg); animation: nb .4s .3s cubic-bezier(.2,1.8,.4,1) both; }
+  .end .laptag .ic { width: 28px; height: 28px; stroke: #fff; stroke-width: 5; }
+  .end .laptag b { color: var(--lemon); letter-spacing: 1px; } .end .laptag span { font-size: 13px; opacity: .85; }
+  .end .nb.inl { position: relative; top: -2px; right: auto; display: inline-block; font-size: 10px; padding: 0 5px; }
   .touch { display: none; }
   body.touching:not(.playing) .touch { display: none; }
   body.touching .touch { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 5; }

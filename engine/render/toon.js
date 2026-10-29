@@ -152,7 +152,8 @@ export class ToonKit {
 }
 
 export function makeLights(scene, { sky = 0xfff4fb, ground = 0xd9c8ff } = {}) {
-  scene.add(new THREE.HemisphereLight(sky, ground, 1.6));
+  const hemi = new THREE.HemisphereLight(sky, ground, 1.6);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.castShadow = true;
   const coarse = matchMedia('(pointer: coarse)').matches;
@@ -164,7 +165,7 @@ export function makeLights(scene, { sky = 0xfff4fb, ground = 0xd9c8ff } = {}) {
   scene.add(sun, sun.target);
   const dir = new THREE.Vector3(-0.45, 1, 0.25).normalize();
   return {
-    sun,
+    sun, hemi,
     follow(x, z) {
       sun.target.position.set(x, 0, z);
       sun.position.set(x + dir.x * 40, dir.y * 40, z + dir.z * 40);

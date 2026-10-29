@@ -9,7 +9,7 @@ const NAMES = ['Petal', 'Stinger', 'Gumdrop', 'Thimble', 'Mothball', 'Sprinkle',
 const coop = q.get('coop');
 // ?tutorial: the How to play lessons on their own little lawn (solo only).
 const tutorial = q.has('tutorial') && !coop;
-let level = tutorial ? 'tutorial' : q.get('level') || 'garden', seed = num('seed'), net = null;
+let level = tutorial ? 'tutorial' : q.get('level') || 'garden', seed = num('seed'), lap = num('lap'), net = null;
 if (coop) {
   // Co-op: join the room on the blog's Phoenix server. The earliest player hosts;
   // a guest takes the seed and level from the host's first world snapshot.
@@ -20,7 +20,7 @@ if (coop) {
   if (!net.isHost) {
     status(`in garden <b>${coop}</b> — waiting for the host to start…`);
     const first = await new Promise(res => net.on('w', m => res(m)));
-    seed = first.seed; level = first.level;
+    seed = first.seed; level = first.level; lap = first.lap ?? 1; // the host decides the lap
   }
 }
 // 'local:<name>' plays an unsaved editor draft from localStorage (works on static hosting).
@@ -29,7 +29,7 @@ const json = level.startsWith('local:')
   : await (await fetch(`game/levels/${level}.json`, { cache: 'no-store' })).json();
 document.getElementById('hud').innerHTML = '';
 const game = new Game(document.getElementById('game'), json, {
-  seed, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), tutorial, boons: q.get('boons'),
+  seed, lap, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), tutorial, boons: q.get('boons'),
 });
 // Debug/automation surface used by tools/playtest.mjs.
 window.__game = game;

@@ -26,9 +26,12 @@ export function loadBests() {
   try { return JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch { return {}; }
 }
 // Returns which records this run broke; saves only when `save` (not for bot/debug runs).
-export function recordBests(t, won, grade, save = true) {
+// `lap` is the lap this report card ends: the deepest lap is a record of its own, and the
+// fastest time only counts lap 1 (a lap 3 knight with nine boons is not the same race).
+export function recordBests(t, won, grade, save = true, lap = 1) {
   const old = loadBests(), next = { ...old }, broke = {};
-  if (won && (old.time == null || t.time < old.time)) { next.time = t.time; broke.time = old.time != null; }
+  if (won && lap === 1 && (old.time == null || t.time < old.time)) { next.time = t.time; broke.time = old.time != null; }
+  if (lap > (old.lap ?? 1)) { next.lap = lap; broke.lap = save; } // a typed ?lap=9 or a bot does not get the stamp
   if (old.grade == null || GRADES.indexOf(grade) > GRADES.indexOf(old.grade)) { next.grade = grade; broke.grade = old.grade != null; }
   if (t.maxChain > (old.chain ?? 0)) { next.chain = t.maxChain; broke.chain = old.chain != null; }
   next.runs = (old.runs ?? 0) + 1;
