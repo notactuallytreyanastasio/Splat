@@ -25,6 +25,23 @@ export class TouchControls {
     addEventListener('pointerup', e => this.up(e), opts);
     addEventListener('pointercancel', e => this.up(e), opts);
     if (matchMedia('(pointer: coarse)').matches) this.show();
+    TouchControls.noZoom();
+  }
+  // iOS Safari zooms on a quick second tap wherever touch-action is not 'none', and
+  // pointer-event preventDefault does not stop it; cancelling the touchend does. Pinch
+  // is blocked only while body.playing, so a menu zoom can still be undone.
+  static noZoom() {
+    if (TouchControls.zoomGuard) return;
+    TouchControls.zoomGuard = true;
+    let last = -Infinity; // 0 would swallow a tap in the first 350ms after page load
+    document.addEventListener('touchend', e => {
+      const now = performance.now();
+      if (now - last < 350 && !e.target.closest?.('input, textarea')) e.preventDefault();
+      last = now;
+    }, { passive: false });
+    document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+    for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, e => { if (document.body.classList.contains('playing')) e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1 && document.body.classList.contains('playing')) e.preventDefault(); }, { passive: false });
   }
   show() { if (!this.active) { this.active = true; document.body.classList.add('touching'); } }
   down(e) {

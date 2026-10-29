@@ -102,6 +102,8 @@
      can be undone. The canvas and the controls take every gesture for the game. */
   html, body { touch-action: manipulation; overscroll-behavior: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
   #game, #game canvas, .touch .tb { touch-action: none; }
+  body.playing, body.playing #hud, body.playing #hud * { touch-action: none; }
+  button, input, .title, .boons, .end, .boons *, .end * { touch-action: manipulation; }
   /* Sizes scale with the screen so a phone, an unfolded Duo and a desktop all fit. */
   .orb { width: clamp(64px, 14vmin, 118px); height: clamp(64px, 14vmin, 118px); border-width: clamp(4px, .8vmin, 6px); }
   .orb span { font-size: clamp(18px, 3.6vmin, 30px); }
