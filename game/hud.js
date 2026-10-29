@@ -1,5 +1,7 @@
 // DOM HUD: Diablo-style health and rage orbs, XP strip, streak counter, banners, boss bar,
 // boon picker and end screen.
+import { icon } from './icons.js';
+
 export class Hud {
   constructor(game) {
     this.g = game;
@@ -9,7 +11,7 @@ export class Hud {
       <div class="orb rage"><div class="fill"></div><span></span></div>
       <div class="xp"><div class="fill"></div><b class="lvl"></b></div>
       <div class="potions"></div>
-      <div class="gems"></div>
+      <div class="gems">${icon('gem')}<span></span></div>
       <div class="streak"><b></b><i></i></div>
       <div class="banner"><h1></h1><h2></h2></div>
       <div class="boss"><label>EMPRESS MANTIS</label><div class="bar"><div class="fill"></div></div></div>
@@ -22,7 +24,7 @@ export class Hud {
         <button>click to start squishing</button>
         <div class="modes"><button class="coop" type="button">host co-op</button><form class="join"><input name="code" placeholder="room code" maxlength="12"><button type="submit">join</button></form></div>
         <small>gamepad works too · up to 4 knights in co-op</small></div>
-      <button class="audio" type="button" aria-label="sound">♪</button>
+      <button class="audio" type="button" aria-label="sound"></button>
       <div class="cue"><i></i><b>!</b></div>
       <div class="roster"></div>
       <div class="tags"></div>
@@ -42,8 +44,9 @@ export class Hud {
     this.$('.rage span').textContent = p.rage >= 100 ? 'Q!' : Math.floor(p.rage);
     this.$('.xp .fill').style.width = (g.xp / g.xpNeed()) * 100 + '%';
     this.$('.xp .lvl').textContent = 'LV ' + g.level_;
-    this.$('.potions').textContent = '♥'.repeat(p.potions) || '·';
-    this.$('.gems').textContent = '◆ ' + g.gems;
+    // innerHTML only on change: these run every frame and the hearts are SVG.
+    if (this.shownPotions !== p.potions) { this.shownPotions = p.potions; this.$('.potions').innerHTML = icon('heart').repeat(p.potions); }
+    if (this.shownGems !== g.gems) { this.shownGems = g.gems; this.$('.gems span').textContent = g.gems; }
     const boss = g.boss;
     this.$('.boss').classList.toggle('on', !!boss && !boss.dead);
     if (boss) this.$('.boss .fill').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
@@ -67,12 +70,13 @@ export class Hud {
     const i = view.renderer.info.render;
     (this.perfEl ??= Object.assign(document.body.appendChild(document.createElement('div')), { className: 'perf' })).textContent = `${(1000 / view.frameMs).toFixed(0)} fps · ${i.calls} calls · ${(i.triangles / 1000).toFixed(0)}k tris · x${view.ratio.toFixed(2)}`;
   }
-  audioIcon(mode) { const b = this.$('.audio'); b.textContent = { all: '♪', sfx: '🔈', off: '🔇' }[mode] ?? '♪'; b.classList.toggle('muted', mode !== 'all'); }
+  audioIcon(mode) { const b = this.$('.audio'); b.innerHTML = icon({ all: 'note', sfx: 'speaker', off: 'mute' }[mode] ?? 'note'); b.classList.toggle('muted', mode !== 'all'); }
   roster() { this.rosterDirty = true; }
   updateCoop() {
     const g = this.g, list = [g.player, ...g.coop.remotes.values()];
     const hex = c => '#' + (c ?? 0xff5fa2).toString(16).padStart(6, '0');
-    this.$('.roster').innerHTML = `<b>room ${g.net.room}</b>` + list.map(k => `<div style="--c:${hex(k.tint?.ring)}"><i></i>${k === g.player ? 'you' : (k.name ?? '?')}${k.ghost ? ' 👻' : ''}<span><em style="width:${Math.max(0, k.hp / k.stats.maxHp * 100)}%"></em></span></div>`).join('');
+    const html = `<b>room ${g.net.room}</b>` + list.map(k => `<div class="${k.ghost ? 'ghost' : ''}" style="--c:${hex(k.tint?.ring)}"><i></i>${k === g.player ? 'you' : (k.name ?? '?')}${k.ghost ? icon('ghost') : ''}<span><em style="width:${Math.max(0, k.hp / k.stats.maxHp * 100).toFixed(0)}%"></em></span></div>`).join('');
+    if (html !== this.rosterHtml) { this.rosterHtml = html; this.$('.roster').innerHTML = html; }
     // Name tags float over the other knights.
     const box = this.$('.tags');
     for (const [id, rp] of g.coop.remotes) {
@@ -132,12 +136,28 @@ export class Hud {
   hurt() { const v = this.$('.vignette'); v.style.opacity = 0.8; }
   showBoons(offers, live = false) {
     const el = this.$('.boons');
+    clearTimeout(this.boonOut);
+    el.classList.remove('on', 'out');
     el.classList.toggle('live', live);
-    el.querySelector('.cards').innerHTML = offers.map((b, i) => `<button data-i="${i}"><em>${i + 1}</em><span class="icon">${b.icon}</span><b>${b.name}</b><small>${b.desc}</small></button>`).join('');
-    el.querySelectorAll('button').forEach(btn => btn.onclick = () => this.g.chooseBoon(+btn.dataset.i));
+    // Numbers in the description are the part you compare, so they get the ink treatment.
+    const desc = d => d.replace(/[+-]?\d+(\.\d+)?%?/g, '<i>$&</i>');
+    el.querySelector('.cards').innerHTML = offers.map((b, i) => `<button class="card" type="button" data-i="${i}" style="--i:${i}"><em class="key">${i + 1}</em><span class="medal">${icon(b.icon)}</span><b>${b.name}</b><small>${desc(b.desc)}</small></button>`).join('');
+    el.querySelectorAll('.card').forEach(btn => btn.onclick = () => this.g.chooseBoon(+btn.dataset.i));
+    el.querySelector('p').textContent = this.g.touch?.active ? 'tap a card' : 'press 1 / 2 / 3 or click';
+    document.body.classList.toggle('picking', !live);
+    void el.offsetWidth; // restart the deal-in animation when a queued pick follows at once
     el.classList.add('on');
   }
-  hideBoons() { this.$('.boons').classList.remove('on'); }
+  // The pick flashes and the rest fall away; the world is already running underneath.
+  hideBoons(picked = -1) {
+    const el = this.$('.boons');
+    if (!el.classList.contains('on')) return;
+    el.querySelector(`.card[data-i="${picked}"]`)?.classList.add('picked');
+    el.classList.add('out');
+    document.body.classList.remove('picking');
+    clearTimeout(this.boonOut);
+    this.boonOut = setTimeout(() => el.classList.remove('on', 'out'), 380);
+  }
   showEnd(won) {
     const t = this.g.telemetry.summary();
     const el = this.$('.end');
