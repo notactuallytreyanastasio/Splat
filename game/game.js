@@ -123,6 +123,11 @@ export class Game {
     this.loop = new Loop({ update: (dt, frozen) => this.update(dt, frozen), render: dt => this.render(dt) });
     this.loop.speed = opts.speed ?? 1;
     this.loop.start();
+    // Compile every shader the level and its bugs use while the title screen is up: the
+    // first frame of play otherwise compiled ~30 programs at once (3s headless, a visible
+    // hitch on a phone) right as the player pressed start.
+    const r = this.view.renderer;
+    if (r.compileAsync) { r.compileAsync(this.scene, this.view.camera).catch(() => {}); r.compileAsync(this.view.grade.scene, this.view.grade.camera).catch(() => {}); }
     this.started = !!opts.bot;
     if (this.started) this.begin();
     else if (!this.net && !this.tutorial && quickStart()) { this.started = true; this.begin(); } // "restart run" from the pause menu

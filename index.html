@@ -241,6 +241,9 @@
   @media (orientation: portrait) { body.touching .lapchip { top: calc(env(safe-area-inset-top) + 64px); } }
   body.noir #hud .lapchip { filter: grayscale(1) contrast(1.2); }
   /* Low on the screen, like the boss card: the room banner up top often lands at the same moment. */
+  /* Paused: the menu owns the screen. Banners, cards and floaters would print through it. */
+  body.paused .banner, body.paused .lapcard, body.paused .bosscard, body.paused .streak, body.paused #floaters, body.paused .cue { visibility: hidden; }
+  .pause { z-index: 9; }
   .lapcard { position: absolute; bottom: 17vh; left: 0; right: 0; text-align: center; opacity: 0; pointer-events: none; }
   @media (orientation: portrait) { .lapcard { bottom: 30vh; } }
   body[data-lap="dusk"] .help { color: #e9e2ff; }
