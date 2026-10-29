@@ -162,6 +162,7 @@
   .audio:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
   .roster .ic { width: 18px; height: 18px; stroke-width: 7; animation: bob 1.2s ease-in-out infinite alternate; }
   .roster .ghost { opacity: .75; }
+  .roster span { margin-left: auto; } /* the ghost glyph must not push one bar out of line */
   @keyframes bob { to { transform: translateY(-3px) rotate(6deg); } }
   .touch .tb > span { display: grid; place-items: center; gap: 1px; }
   .touch .tb .ic { width: calc(var(--s) * .52); height: calc(var(--s) * .52); stroke-width: 6; }
