@@ -99,6 +99,7 @@ export class Pause {
     g.view.zoomScale = ZOOM[s.zoom];
     g.flashScale = FLASH[s.flash];
     document.body.style.setProperty('--fk', FLASH[s.flash]);
+    document.body.classList.toggle('calmfx', FLASH[s.flash] < 1);
     for (const o of this.el.querySelectorAll('output')) o.textContent = s[o.dataset.o];
     for (const r of this.el.querySelectorAll('input[type=range]')) r.style.setProperty('--p', s[r.dataset.k] + '%');
     for (const sg of this.el.querySelectorAll('.seg')) for (const b of sg.querySelectorAll('button')) {
@@ -155,7 +156,8 @@ export class Pause {
       quickStart(true);
       return g.restart(true);
     }
-    if (a === 'howto') { location.search = '?tutorial'; return; }
+    // Co-op: the lessons open in a new tab, so reading them does not walk out of the room.
+    if (a === 'howto') { if (g.net) window.open('?tutorial', '_blank', 'noopener'); else location.search = '?tutorial'; return; }
     if (a === 'title') { location.search = ''; }
   }
   key(e) {

@@ -434,9 +434,14 @@
   body.touching .pausebtn { width: 44px; height: 44px; right: auto; top: calc(env(safe-area-inset-top) + 16px + clamp(54px, 11vmin, 90px)); left: calc(env(safe-area-inset-left) + 8px + (clamp(54px, 11vmin, 90px) - 44px) / 2); }
   body.touching .pausebtn .ic { width: 25px; height: 25px; }
   body.touching .roster { top: calc(env(safe-area-inset-top) + 68px + clamp(54px, 11vmin, 90px)); }
+  /* On a narrow phone the button sits where the boss bar's left end and the lesson card's
+     corner (and its skip chip) used to be: shorten the bar, drop the card below the button. */
+  body.touching .boss { width: min(640px, 70vw, calc(100vw - 2 * (env(safe-area-inset-left) + 64px))); }
+  @media (orientation: portrait) and (max-width: 680px) { body.touching .tut { top: calc(env(safe-area-inset-top) + 76px + clamp(54px, 11vmin, 90px)); } }
   body.paused .touch, body.paused .tut, body.paused .cue { visibility: hidden; }
-  /* The flashing setting scales every full-screen flash; the parry ring stays, it is a cue. */
-  #hud .flash, #hud .edge, #hud .vignette, #hud .lowhp { filter: opacity(var(--fk, 1)); }
+  /* The flashing setting scales every full-screen flash; the parry ring stays, it is a cue.
+     Only when turned down: a filter on four full-screen layers is not free at full. */
+  body.calmfx #hud .flash, body.calmfx #hud .edge, body.calmfx #hud .vignette, body.calmfx #hud .lowhp { filter: opacity(var(--fk, 1)); }
   .pause { position: absolute; inset: 0; z-index: 8; display: none; place-items: center; overflow-y: auto; overscroll-behavior: contain;
     padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); pointer-events: auto; touch-action: pan-y;
     background: radial-gradient(circle, rgba(58,35,70,.22), rgba(58,35,70,.5)); backdrop-filter: blur(1.5px) saturate(.6); -webkit-backdrop-filter: blur(1.5px) saturate(.6); }
@@ -495,6 +500,12 @@
     .pause .seg button { min-width: 46px; padding: 0 7px; font-size: 14px; }
     .pause .sheet { padding: 16px 14px 12px; }
     .pause .badge { width: 52px; height: 52px; top: -20px; left: 14px; } .pause .badge .ic { width: 32px; height: 32px; }
+  }
+  /* Under ~400px "flashing & noir" plus three choices no longer fit on one line (a 360px
+     Android pushed "calm" 9px out of the card): put each choice group under its label. */
+  @media (max-width: 400px) {
+    .pause div.row { grid-template-columns: 1fr; gap: 4px; padding: 5px 0 8px; }
+    .pause div.row .seg { margin-left: 29px; }
   }
   @media (max-height: 480px) {
     .pause .sheet { padding: 10px 18px 8px; }
