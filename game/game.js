@@ -249,6 +249,18 @@ export class Game {
     return e;
   }
   roomOf(e) { return this.level.regionAt(Math.floor(e.x), Math.floor(e.z)); }
+  // The nearest point to (x, z) with r of open floor around it. Pickups do not move, so one
+  // dropped by a bug dying against a hedge or a mushroom would otherwise sit inside it, out
+  // of reach of a knight (and the bot, which walked into the hedge after it forever).
+  openSpot(x, z, r = 0.35) {
+    const clear = (px, pz) => !this.map.solidAt(px, pz) && [[r, 0], [-r, 0], [0, r], [0, -r]].every(([ox, oz]) => !this.map.solidAt(px + ox, pz + oz));
+    if (clear(x, z)) return { x, z };
+    for (let ring = 1; ring <= 8; ring++) for (let k = 0; k < ring * 8; k++) {
+      const a = (k / (ring * 8)) * Math.PI * 2, px = x + Math.cos(a) * ring * 0.25, pz = z + Math.sin(a) * ring * 0.25;
+      if (clear(px, pz)) return { x: px, z: pz };
+    }
+    return { x, z };
+  }
   updateRooms(dt) {
     const p = this.player, rid = this.roomOf(p), room = this.level.rooms[rid];
     if (rid !== this.currentRoom && rid >= 0) { this.currentRoom = rid; this.telemetry.enterRoom(room); }
@@ -454,7 +466,7 @@ export class Game {
     this.events.emit('kill', { target: t, info, overkill });
     const xp = (t.def?.xp ?? 1) * (t.elite ? 3 : 1);
     for (let i = 0; i < xp; i += i < 4 ? 1 : 5) this.world.add(new Gem(this, t.x, t.z, xp - i >= 5 && i >= 4 ? 5 : 1));
-    if (Math.random() < (t.elite ? 0.5 : 0.08)) this.world.add(new Potion(this, t.x + fx.f(-0.5, 0.5), t.z + fx.f(-0.5, 0.5)));
+    if (Math.random() < (t.elite ? 0.5 : 0.08)) { const o = this.openSpot(t.x + fx.f(-0.5, 0.5), t.z + fx.f(-0.5, 0.5)); this.world.add(new Potion(this, o.x, o.z)); }
     const splitRoom = this.level.rooms[t.room];
     if (t.def?.split && splitRoom?.active) {
       for (const s of [-1, 1]) {
@@ -1088,7 +1100,7 @@ export class Game {
     this.fx('brk', { x: r2(b.x), z: r2(b.z), k: b.kind });
     const gems = b.kind === 'jar' ? 3 : 14;
     for (let i = 0; i < gems; i++) this.world.add(new Gem(this, b.x, b.z, i < 2 && b.kind === 'cocoon' ? 5 : 1));
-    if (b.kind === 'cocoon' || Math.random() < 0.15) this.world.add(new Potion(this, b.x + 0.6, b.z + 0.3));
+    if (b.kind === 'cocoon' || Math.random() < 0.15) { const o = this.openSpot(b.x + 0.6, b.z + 0.3); this.world.add(new Potion(this, o.x, o.z)); }
     this.telemetry.breakable(b.kind);
   }
   breakFx(d) {
