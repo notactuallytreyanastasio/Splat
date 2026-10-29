@@ -30,5 +30,17 @@ export function defineSounds(s) {
   s.define('roar', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 160, f1: 60, dur: 1.0, vol: 0.25 }); s.noise(t, { dur: 0.9, vol: 0.3, f0: 800, f1: 100, type: 'lowpass' }); });
   s.define('summon', (s, t) => [880, 660, 990].forEach((f, i) => s.tone(t + i * 0.1, { type: 'triangle', f0: f, dur: 0.15, vol: 0.1 })));
   s.define('parry', (s, t) => { s.tone(t, { type: 'triangle', f0: 1568, dur: 0.5, vol: 0.22 }); s.tone(t, { type: 'sine', f0: 2349, dur: 0.35, vol: 0.12 }); s.tone(t + 0.04, { type: 'sine', f0: 3136, dur: 0.25, vol: 0.06 }); });
+  // The Empress: one voice per attack, so you can fight her with your eyes shut.
+  s.define('scythedraw', (s, t, o) => { s.tone(t, { type: 'triangle', f0: 1400 * P(o), f1: 2800 * P(o), dur: 0.45, vol: 0.09, attack: 0.2 }); s.noise(t, { dur: 0.45, vol: 0.12, f0: 3000, f1: 7000, q: 6 }); });
+  s.define('scythe', (s, t) => { s.noise(t, { dur: 0.28, vol: 0.4, f0: 500, f1: 4000, q: 1.5 }); s.tone(t, { type: 'triangle', f0: 2637, f1: 2200, dur: 0.35, vol: 0.12 }); s.tone(t, { type: 'square', f0: 180, f1: 70, dur: 0.18, vol: 0.12 }); });
+  s.define('chargerev', (s, t, o) => { s.tone(t, { type: 'sawtooth', f0: 48 * P(o), f1: 130 * P(o), dur: 0.9, vol: 0.2, attack: 0.3 }); s.noise(t, { dur: 0.9, vol: 0.25, f0: 150, f1: 700, type: 'lowpass' }); for (let i = 0; i < 4; i++) s.tone(t + i * 0.2 / P(o), { type: 'sine', f0: 110, f1: 40, dur: 0.12, vol: 0.3 }); });
+  s.define('bellow', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 220, f1: 70, dur: 0.7, vol: 0.25 }); s.tone(t, { type: 'square', f0: 110, f1: 45, dur: 0.6, vol: 0.12 }); s.noise(t, { dur: 0.5, vol: 0.25, f0: 1200, f1: 200, type: 'lowpass' }); });
+  s.define('novacharge', (s, t, o) => [784, 988, 1175, 1568, 1976, 2349].forEach((f, i) => s.tone(t + i * 0.12 / P(o), { type: 'triangle', f0: f * P(o), dur: 0.18, vol: 0.06 + i * 0.012 })));
+  s.define('nova', (s, t) => { s.tone(t, { type: 'sine', f0: 2349, f1: 1175, dur: 0.4, vol: 0.18 }); s.tone(t, { type: 'triangle', f0: 3136, f1: 1568, dur: 0.3, vol: 0.08 }); s.noise(t, { dur: 0.35, vol: 0.22, f0: 6000, f1: 1500, q: 0.8 }); });
+  s.define('brood', (s, t) => { s.noise(t, { dur: 0.6, vol: 0.4, f0: 500, f1: 120, q: 7, type: 'lowpass' }); for (let i = 0; i < 3; i++) s.tone(t + i * 0.13, { type: 'sine', f0: 140 + i * 40, f1: 60, dur: 0.12, vol: 0.25 }); });
+  s.define('shriek', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 700, f1: 1700, dur: 0.75, vol: 0.14, attack: 0.05 }); s.tone(t, { type: 'square', f0: 940, f1: 2300, dur: 0.75, vol: 0.06 }); s.tone(t + 0.4, { type: 'sawtooth', f0: 1700, f1: 900, dur: 0.5, vol: 0.1 }); });
+  s.define('enrage', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 130, f1: 45, dur: 1.2, vol: 0.3 }); s.tone(t, { type: 'sawtooth', f0: 900, f1: 2000, dur: 0.6, vol: 0.1 }); s.noise(t, { dur: 1.1, vol: 0.35, f0: 900, f1: 80, type: 'lowpass' }); s.tone(t, { type: 'sine', f0: 70, f1: 30, dur: 0.9, vol: 0.5 }); });
+  s.define('bossdie', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 500, f1: 2600, dur: 0.7, vol: 0.16 }); s.tone(t, { type: 'square', f0: 660, f1: 3300, dur: 0.7, vol: 0.06 }); s.noise(t, { dur: 0.7, vol: 0.2, f0: 800, f1: 5000, q: 2 }); });
+  s.define('clink', (s, t, o) => { s.tone(t, { type: 'sine', f0: 2093 * P(o), dur: 0.3, vol: 0.14 }); s.tone(t, { type: 'triangle', f0: 3136 * P(o), dur: 0.18, vol: 0.06 }); });
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
 }

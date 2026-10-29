@@ -1,5 +1,18 @@
 // DOM HUD: Diablo-style health and rage orbs, XP strip, streak counter, banners, boss bar,
 // boon picker and end screen.
+
+// Hand-drawn in the house style: fat ink outline, pastel fills. No emoji anywhere.
+const INK = '#3a2346';
+const CROWN = `<path d="M30 66 L22 28 L44 46 L60 18 L76 46 L98 28 L90 66 Z" fill="#ffd66b" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="27" y="58" width="66" height="13" rx="5" fill="#ffc94d" stroke="${INK}" stroke-width="5"/>
+  <circle cx="22" cy="28" r="5.5" fill="#fff1a1" stroke="${INK}" stroke-width="4"/><circle cx="60" cy="18" r="5.5" fill="#fff1a1" stroke="${INK}" stroke-width="4"/><circle cx="98" cy="28" r="5.5" fill="#fff1a1" stroke="${INK}" stroke-width="4"/>
+  <path d="M60 58 C50 51 47 43 53 40 C56.5 38.5 60 41 60 44 C60 41 63.5 38.5 67 40 C73 43 70 51 60 58 Z" fill="#ff5fa2" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M38 36 L40 44" stroke="#fffbff" stroke-width="3" stroke-linecap="round"/>`;
+const SCYTHE = `<path d="M40 60 L22 52" stroke="${INK}" stroke-width="9" stroke-linecap="round"/><path d="M40 60 L22 52" stroke="#9ff0d4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M24 54 Q-2 46 4 8 Q12 34 30 44 Z" fill="#ff9ecb" stroke="${INK}" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M9 22 L15 24 M8 31 L15 31 M11 39 L17 37" stroke="#fffbff" stroke-width="3" stroke-linecap="round"/>`;
+const EMBLEM = `<svg viewBox="0 0 120 80" aria-hidden="true">${SCYTHE}<g transform="translate(120 0) scale(-1 1)">${SCYTHE}</g>${CROWN}</svg>`;
+const MINI_CROWN = `<svg viewBox="16 12 88 64" aria-hidden="true">${CROWN}</svg>`;
 export class Hud {
   constructor(game) {
     this.g = game;
@@ -46,7 +59,12 @@ export class Hud {
     this.$('.gems').textContent = '◆ ' + g.gems;
     const boss = g.boss;
     this.$('.boss').classList.toggle('on', !!boss && !boss.dead);
-    if (boss) this.$('.boss .fill').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
+    if (boss) {
+      this.$('.boss .fill').style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
+      this.bossBar(boss);
+    }
+    if (this.cineT > 0 && (this.cineT -= dt) <= 0) this.$('.cine')?.classList.remove('on');
+    if (this.cardT > 0 && (this.cardT -= dt) <= 0) { const c = this.$('.bosscard'); c.classList.remove('on'); c.classList.add('off'); }
     this.bannerT -= dt;
     this.$('.banner').classList.toggle('on', this.bannerT > 0);
     const v = this.$('.vignette');
@@ -127,6 +145,37 @@ export class Hud {
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(); };
     t.querySelector('button').onclick = go;
     addEventListener('keydown', key);
+  }
+  // ------------------------------------------------------------ the Empress
+  // Built on first use so the shared template above stays untouched.
+  bossUi() {
+    if (this._bossUi) return;
+    this._bossUi = true;
+    const root = document.getElementById('hud');
+    const add = (cls, html = '') => { const el = document.createElement('div'); el.className = cls; el.innerHTML = html; return el; };
+    root.prepend(add('cine'));
+    root.append(add('flash'), add('bosscard', `${EMBLEM}<div class="ribbon"><h1></h1></div><h2></h2>`));
+    const bar = this.$('.boss .bar'), label = this.$('.boss label');
+    bar.insertAdjacentHTML('beforeend', '<i class="notch"></i>');
+    label.innerHTML = `${MINI_CROWN}<span>${label.textContent}</span>${MINI_CROWN}`;
+  }
+  bossBar(boss) { this.bossUi(); this.$('.boss').classList.toggle('p2', !!boss.phase2); }
+  bossCard(title, sub, dur = 2) {
+    this.bossUi();
+    const c = this.$('.bosscard');
+    c.querySelector('h1').textContent = title;
+    c.querySelector('h2').textContent = sub;
+    c.classList.remove('off', 'on'); void c.offsetWidth; c.classList.add('on');
+    this.cardT = dur;
+    this.bannerT = 0; // the card is the only words on screen
+  }
+  // Letterbox bars for a cinematic beat; they leave on their own.
+  cinema(dur) { this.bossUi(); this.$('.cine').classList.add('on'); this.cineT = Math.max(this.cineT ?? 0, dur); }
+  flash(color) {
+    this.bossUi();
+    const f = this.$('.flash');
+    f.style.background = color;
+    f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
   }
   parried() { const c = this.$('.cue'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
   hurt() { const v = this.$('.vignette'); v.style.opacity = 0.8; }

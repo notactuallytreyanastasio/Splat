@@ -68,6 +68,8 @@ export class Game {
     this.telegraphs = [];
     this.slashes = [];
     this.pending = [];
+    this.timers = [];   // render-time delays for cinematic beats; paused during hitstop
+    this.trophies = [];
     this.state = 'play';
     this.xp = 0; this.level_ = 1; this.gems = 0;
     this.streak = 0; this.streakT = 0; this.bestStreak = 0;
@@ -163,9 +165,9 @@ export class Game {
       case 'dc': return this.gore.decals.splat(d.x, d.z, d.r, d.c);
       case 'ws': return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
       case 'pf': return this.gore.puff(d.x, d.y, d.z, d.c);
-      case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d);
-      case 'tl': return this.telegraphLine_(d.x, d.z, d.dx, d.dz, d.l, d.w, d.d);
-      case 'ta': { const src = this.world.byId.get(d.id); if (src) this.telegraphArc_(src, d.r, d.a, d.d); return; }
+      case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d, d.h);
+      case 'tl': return this.telegraphLine_(d.x, d.z, d.dx, d.dz, d.l, d.w, d.d, d.h);
+      case 'ta': { const src = this.world.byId.get(d.id); if (src) this.telegraphArc_(src, d.r, d.a, d.d, d.h); return; }
       case 'slam': return this.slam_(d.x, d.z, d.r);
       case 'st': return this.hud.streak(d.n, d.t);
       case 'hit': return this.hitFx(d);
@@ -182,6 +184,8 @@ export class Game {
       case 'lose': return this.lose();
       case 'restart': return this.restart(false, d.seed);
       case 'parried': return this.parriedFx(d);
+      case 'bi': return this.bossIntroFx(d);
+      case 'bph': return this.bossPhaseFx(d);
     }
   }
 
@@ -275,9 +279,7 @@ export class Game {
     this.fx('sh', { a: 0.25 });
     if (room.boss) {
       this.boss = room.enemies.find(e => e.boss);
-      this.fx('bn', { t: 'EMPRESS MANTIS', s: 'she wants her babies back' });
-      this.fx('sx', { n: 'roar' });
-      if (this.boss) this.boss.cooldown = 2;
+      if (this.boss) { this.boss.set('intro'); this.boss.cooldown = 0.6; this.fx('bi', { id: this.boss.nid }); }
     } else this.fx('bn', { t: room.name?.toUpperCase() ?? 'AMBUSH', s: `${room.enemies.length} pretty little lives` });
     this.events.emit('roomStart', room);
   }
@@ -303,7 +305,8 @@ export class Game {
     // The fallen get back up when the room is won.
     const alive = this.players.find(k => !k.ghost);
     for (const k of this.players) if (k.ghost && alive) this.fx('rez', { to: k.pid, x: alive.x + 0.8, z: alive.z });
-    if (room.boss) { this.fx('win', {}); return; }
+    // The Empress gets her death scene before the curtain.
+    if (room.boss) { this.later(3.6, () => this.fx('win', {})); return; }
     this.fx('bn', { t: 'CLEARED!', s: 'smack the cocoon for prizes' });
     const c = room.center;
     const tile = room.tiles.map(([x, z]) => ({ x: x + 0.5, z: z + 0.5 })).filter(t => !this.map.solidAt(t.x, t.z))
@@ -432,6 +435,7 @@ export class Game {
     t.dead = true;
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
+    if (t.boss) return this.bossDeathFx(t, d);
     // Corpses are only projectiles on the host, where damage is decided.
     this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null }, !!d.o);
     this.sfx.play('squish');
@@ -502,37 +506,58 @@ export class Game {
     this.telegraphs.push(t);
     return t;
   }
-  teleMaterial(opacity) { return new THREE.MeshBasicMaterial({ color: 0xff2d6f, transparent: true, opacity, depthWrite: false }); }
-  telegraphCircle(x, z, r, d) { this.fx('tc', { x: r2(x), z: r2(z), r, d }); }
-  telegraphLine(x, z, dx, dz, l, w, d) { this.fx('tl', { x: r2(x), z: r2(z), dx: r2(dx), dz: r2(dz), l, w, d }); }
-  telegraphArc(src, r, a, d) { this.fx('ta', { id: src.nid, r, a, d }); }
-  telegraphCircle_(x, z, r, dur) {
+  // heat: 0 plain, 1 boss (the fill snaps bright the instant it lands), 2 enraged boss
+  // (deeper red, and the floor throbs faster as the hit gets closer).
+  teleMaterial(opacity, heat = 0) { return new THREE.MeshBasicMaterial({ color: heat === 2 ? 0xff0a3c : 0xff2d6f, transparent: true, opacity, depthWrite: false }); }
+  teleHeat(back, fill, p, heat, t) {
+    if (!heat) return;
+    if (heat === 2) back.material.opacity = back.userData.o * (0.7 + 0.6 * Math.max(0, Math.sin(t * (14 + p * 30))));
+    fill.material.opacity = p > 0.9 ? 0.8 : fill.userData.o;
+  }
+  telegraphCircle(x, z, r, d, h = 0) { this.fx('tc', { x: r2(x), z: r2(z), r, d, ...(h ? { h } : {}) }); }
+  telegraphLine(x, z, dx, dz, l, w, d, h = 0) { this.fx('tl', { x: r2(x), z: r2(z), dx: r2(dx), dz: r2(dz), l, w, d, ...(h ? { h } : {}) }); }
+  telegraphArc(src, r, a, d, h = 0) { this.fx('ta', { id: src.nid, r, a, d, ...(h ? { h } : {}) }); }
+  telegraphCircle_(x, z, r, dur, heat = 0) {
     const g = new THREE.Group();
-    const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.92, r, 40), this.teleMaterial(0.8));
-    const fill = new THREE.Mesh(new THREE.CircleGeometry(r, 40), this.teleMaterial(0.3));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r * (heat ? 0.86 : 0.92), r, 40), this.teleMaterial(0.8, heat));
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(r, 40), this.teleMaterial(0.3, heat));
+    ring.userData.o = 0.8; fill.userData.o = 0.3;
     for (const m of [ring, fill]) { m.rotation.x = -Math.PI / 2; g.add(m); }
     g.position.set(x, 0, z);
-    return this.telegraph(g, dur, p => fill.scale.setScalar(Math.max(0.01, p)));
+    let t = 0;
+    return this.telegraph(g, dur, p => { t = p * dur; fill.scale.setScalar(Math.max(0.01, p)); this.teleHeat(ring, fill, p, heat, t); });
   }
-  telegraphLine_(x, z, dx, dz, len, w, dur) {
+  telegraphLine_(x, z, dx, dz, len, w, dur, heat = 0) {
     const g = new THREE.Group();
     const geo = new THREE.PlaneGeometry(w, len); geo.translate(0, len / 2, 0);
-    const back = new THREE.Mesh(geo, this.teleMaterial(0.25)), fill = new THREE.Mesh(geo, this.teleMaterial(0.45));
+    const back = new THREE.Mesh(geo, this.teleMaterial(0.25, heat)), fill = new THREE.Mesh(geo, this.teleMaterial(0.45, heat));
+    back.userData.o = 0.25; fill.userData.o = 0.45;
     for (const m of [back, fill]) { m.rotation.x = -Math.PI / 2; g.add(m); }
+    if (heat) for (const sx of [-1, 1]) {
+      // Hard edges so the lane she will run down reads at a glance.
+      const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.08, len).translate(sx * w / 2, len / 2, 0), this.teleMaterial(0.9, heat));
+      edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI; edge.position.y = 0.005; g.add(edge);
+    }
     g.rotation.set(0, Math.atan2(dx, dz), 0);
     back.rotation.z = fill.rotation.z = Math.PI;
     g.position.set(x, 0, z);
-    return this.telegraph(g, dur, p => fill.scale.set(1, Math.max(0.01, p), 1));
+    return this.telegraph(g, dur, p => { fill.scale.set(1, Math.max(0.01, p), 1); this.teleHeat(back, fill, p, heat, p * dur); });
   }
-  telegraphArc_(src, r, arc, dur) {
+  telegraphArc_(src, r, arc, dur, heat = 0) {
     const g = new THREE.Group();
     const geo = new THREE.CircleGeometry(r, 32, Math.PI / 2 - arc / 2, arc);
-    const back = new THREE.Mesh(geo, this.teleMaterial(0.25)), fill = new THREE.Mesh(geo, this.teleMaterial(0.45));
+    const back = new THREE.Mesh(geo, this.teleMaterial(0.25, heat)), fill = new THREE.Mesh(geo, this.teleMaterial(0.45, heat));
+    back.userData.o = 0.25; fill.userData.o = 0.45;
     for (const m of [back, fill]) { m.rotation.x = -Math.PI / 2; g.add(m); }
+    if (heat) {
+      const rim = new THREE.Mesh(new THREE.RingGeometry(r - 0.1, r, 32, 1, Math.PI / 2 - arc / 2, arc), this.teleMaterial(0.9, heat));
+      rim.rotation.x = -Math.PI / 2; rim.position.y = 0.005; g.add(rim);
+    }
     return this.telegraph(g, dur, p => {
       g.position.set(src.x, 0.04, src.z);
       g.rotation.y = src.facing;
       fill.scale.setScalar(Math.max(0.01, p));
+      this.teleHeat(back, fill, p, heat, p * dur);
     });
   }
   slam(x, z, r) { this.fx('slam', { x: r2(x), z: r2(z), r }); if (!this.guest) this.loop.freeze(0.05); }
@@ -555,7 +580,7 @@ export class Game {
         this.world.add(new Pollen(this, src.x + Math.sin(a) * 1.2, src.z + Math.cos(a) * 1.2, Math.sin(a) * sp, Math.cos(a) * sp, 12, { heart: true }));
       }
     }
-    this.fx('sx', { n: 'screech', o: { pitch: 1.5 } });
+    this.fx('sx', { n: 'nova' });
     this.fx('sh', { a: 0.2 });
   }
   summon(src, n) {
@@ -572,7 +597,7 @@ export class Game {
     this.fx('bn', { t: '', s: 'MY BABIES! (throw them at her)', d: 1.6 });
     this.fx('sx', { n: 'summon' });
   }
-  onBossPhase(b) { this.fx('bn', { t: 'SHE IS FURIOUS', s: 'phase two', d: 1.6 }); this.fx('sx', { n: 'roar' }); this.fx('sh', { a: 0.6 }); this.fx('cf', { x: r2(b.x), y: 2, z: r2(b.z), n: 40, p: 8 }); }
+  onBossPhase(b) { this.fx('bph', { id: b.nid, x: r2(b.x), z: r2(b.z) }); }
   onBossWall(b, hit) {
     this.fx('sh', { a: 0.8, k: 0.06 }); this.loop.freeze(0.14);
     this.fx('sx', { n: 'bonk', o: { pitch: 0.35 } }); this.fx('sx', { n: 'slam' });
@@ -581,12 +606,126 @@ export class Game {
     this.damage(b, { amount: 35, team: 'player', kind: 'wall', knock: 0 });
   }
   bossDead(b) {
-    this.loop.freeze(0.35);
-    this.slowmo = 2.5;
-    this.fx('sh', { a: 1 });
+    // Freeze, zoom and the explosion itself are in bossDeathFx so every peer sees them.
+    this.slowmo = 2.4;
     const room = this.level.rooms[b.room];
     for (const e of room.enemies) if (!e.dead && e !== b) this.pending.push(() => this.damage(e, { amount: 999, team: 'player', kind: 'boom', dirX: fx.f(-1, 1), dirZ: fx.f(-1, 1), knock: 10, lift: 8 }));
+    // Nothing she left in the air gets to land a cheap shot during her death scene.
+    for (const e of this.world.entities) if (e instanceof Pollen && e.team === 'enemy' && !e.dead) e.pop();
     this.boss = null;
+  }
+
+  // ------------------------------------------------------------------ the Empress, cinematics (every peer)
+  later(s, fn) { this.timers.push({ t: s, fn }); }
+  // Her room locks: the camera goes to her, she rears and screeches, her name card lands,
+  // the camera comes home. About two seconds; the knight can still move the whole time.
+  bossIntroFx(d) {
+    const b = this.world.byId.get(d.id);
+    if (!b) return;
+    this.view.focusOn(b, { ease: 0.5, hold: 1.25, out: 0.55, zoom: 0.3, lift: 1.1 });
+    this.hud.cinema(2.1);
+    this.sfx.play('roar');
+    this.later(0.45, () => {
+      this.sfx.play('shriek');
+      this.view.shake(0.35);
+      this.gore.confettiBurst(b.x, 2.6, b.z, 26, 5, [0xff9ecb, 0xfff1a1, 0xc6f5d2]);
+      this.hud.bossCard('EMPRESS MANTIS', 'she wants her babies back', 2.1);
+    });
+  }
+  // Half health: eyes go red, wings flare, she roars. Her attacks get the hot telegraphs.
+  bossPhaseFx(d) {
+    const b = this.world.byId.get(d.id);
+    if (b) b.phase2 = true;
+    const x = b?.x ?? d.x, z = b?.z ?? d.z;
+    if (b) this.view.focusOn(b, { ease: 0.2, hold: 0.55, out: 0.45, zoom: 0.16, lift: 0.8 });
+    this.hud.flash('rgba(255,40,90,.45)');
+    this.hud.banner('SHE IS FURIOUS', 'her eyes went red. so will you.', 1.8);
+    this.sfx.play('enrage');
+    this.view.shake(0.6);
+    this.gore.confettiBurst(x, 2.2, z, 70, 9, [0xff2d6f, 0xff5fa2, 0xff9ecb, 0xfff1a1]);
+    this.gore.spray(x, 2.4, z, 0, 0, 40, 6, [0xd4002e, 0x7dffc0]);
+    for (const [r0, dur] of [[1.2, 0.45], [0.8, 0.6]]) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r0 + 0.25, 48), new THREE.MeshBasicMaterial({ color: 0xff2d6f, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.12, z);
+      this.scene.add(ring);
+      this.slashes.push({ g: ring, t: 0, dur, ring: true });
+    }
+  }
+  // The kill blow: everything stops, the camera closes in, she flashes, then she comes apart
+  // in a shower of gibs and confetti and her crown goes bouncing off across the floor.
+  bossDeathFx(t, d) {
+    const r = t.rig;
+    t.onRemove = () => {}; // the cinematic owns the rig now; it leaves the scene when it bursts
+    this.loop.freeze(0.7);
+    this.view.focusOn({ x: t.x, z: t.z }, { ease: 0.3, hold: 2, out: 0.7, zoom: 0.38, lift: 0.8 });
+    this.hud.cinema(4.4);
+    // Her attack is cancelled by dying; its warning goes with it.
+    for (const tg of this.telegraphs.splice(0)) this.scene.remove(tg.mesh);
+    this.threat = Infinity; // and so is the parry cue it was driving
+    this.hud.flash('rgba(255,255,255,.85)');
+    this.sfx.play('bossdie');
+    this.view.shake(0.3);
+    r.kit.flash(1, 0xffffff);
+    const snap = { x: t.x, y: t.y, z: t.z, radius: t.radius, mass: t.mass, chain: 0, def: t.def, rig: { ...r, gibs: r.gibs.filter(g => g !== r.parts.crown) } };
+    this.later(0, () => {
+      r.kit.flash(0);
+      const crown = r.parts.crown;
+      // Out of the rig before it bursts, so the gore never takes it.
+      crown.updateWorldMatrix(true, false);
+      this.scene.attach(crown);
+      crown.scale.multiplyScalar(2);
+      this.gore.kill(snap, { dirX: d.dx, dirZ: d.dz, knock: 14 }, true);
+      r.root.parent?.remove(r.root);
+      const blood = t.def.blood;
+      this.gore.spray(t.x, 2, t.z, 0, 0, 160, 11, blood);
+      for (let i = 0; i < 36; i++) {
+        const c = goreChunk(fx.pick(['gut', 'heart', 'eye', 'meat', 'bone', 'candy']));
+        c.position.set(t.x + fx.f(-0.6, 0.6), fx.f(1, 2.6), t.z + fx.f(-0.6, 0.6));
+        c.scale.multiplyScalar(fx.f(1, 1.8));
+        this.scene.add(c);
+        const a = fx.f(0, 6.28), sp = fx.f(3, 12);
+        this.gore.fling(c, t.x, t.z, Math.cos(a) * sp, fx.f(6, 15), Math.sin(a) * sp, blood, 0.14);
+      }
+      this.gore.decals.splat(t.x, t.z, 1.5, '#c4002a');
+      for (const [delay, n, p, y] of [[0, 160, 11, 2.2], [0.25, 110, 8, 3], [0.6, 90, 6, 3.6]]) this.later(delay, () => this.gore.confettiBurst(t.x, y, t.z, n, p));
+      this.view.shake(1); this.view.kick(0.08);
+      this.sfx.play('pop'); this.sfx.play('slam'); this.sfx.play('squish');
+      // The crown flies the way the killing blow went, the same on every peer.
+      const l = Math.hypot(d.dx, d.dz) || 1, dx = d.dx / l || 0.7, dz = d.dz / l || 0.7;
+      this.trophies.push({ obj: crown, v: new THREE.Vector3(dx * 4, 10, dz * 4), spin: 9, tumble: 14, glint: 0 });
+      // Then the camera follows the crown until it comes to rest.
+      this.later(0.9, () => this.view.focusOn(crown.position, { ease: 0.8, hold: 2.4, out: 0.8, zoom: 0.3 }));
+    });
+  }
+  updateTrophies(dt) {
+    for (const c of this.trophies) {
+      const o = c.obj, p = o.position, v = c.v;
+      if (c.rest) {
+        // A trophy: it sits where it fell and glints now and then.
+        o.rotation.y += dt * 0.6;
+        if ((c.glint -= dt) <= 0) { c.glint = 1.4; this.gore.confettiBurst(p.x, 0.5, p.z, 4, 1.2, [0xfff1a1, 0xffffff, 0xffd66b]); }
+        continue;
+      }
+      v.y -= 26 * dt;
+      const nx = p.x + v.x * dt, nz = p.z + v.z * dt;
+      if (this.map.solidAt(nx, p.z)) v.x *= -0.6; else p.x = nx;
+      if (this.map.solidAt(p.x, nz)) v.z *= -0.6; else p.z = nz;
+      p.y += v.y * dt;
+      o.rotation.y += c.spin * dt;
+      o.rotation.x += c.tumble * dt;
+      const floor = 0.1;
+      if (p.y < floor) {
+        p.y = floor;
+        if (v.y < -2.5) {
+          this.sfx.play('clink', { pitch: 0.8 + Math.min(1, -v.y / 14) * 0.6, gap: 0.04 });
+          this.gore.confettiBurst(p.x, 0.2, p.z, 6, 2, [0xfff1a1, 0xffd66b]);
+          v.y *= -0.55; v.x *= 0.78; v.z *= 0.78; c.spin *= 0.7; c.tumble *= 0.45;
+        } else { v.y = 0; v.x *= 0.9; v.z *= 0.9; }
+      }
+      // Land upright: the tumble settles to the nearest full turn as it slows.
+      if (p.y <= floor + 0.02 && Math.abs(v.y) < 1) { const up = Math.round(o.rotation.x / (Math.PI * 2)) * Math.PI * 2; o.rotation.x += (up - o.rotation.x) * Math.min(1, dt * 10); c.tumble *= Math.exp(-dt * 6); }
+      if (p.y <= floor + 0.01 && Math.hypot(v.x, v.z) < 0.25 && Math.abs(v.y) < 0.5) { c.rest = true; o.position.y = floor; o.rotation.x = 0; o.rotation.z = 0; this.sfx.play('clink', { pitch: 1.6 }); }
+    }
   }
 
   // ------------------------------------------------------------------ player feedback hooks (local)
@@ -888,6 +1027,7 @@ export class Game {
     if (this.streakT <= 0 && this.streak) { this.streak = 0; this.fx('st', { n: 0 }); }
     this.gemComboT -= dt;
     if (this.gemComboT <= 0) this.gemCombo = 0;
+    if (this.trophies.length) this.updateTrophies(dt);
     for (let i = this.telegraphs.length - 1; i >= 0; i--) {
       const t = this.telegraphs[i];
       t.t += dt;
@@ -952,8 +1092,9 @@ export class Game {
     const p = this.player.ghost ? (this.players.find(k => !k.ghost) ?? this.player) : this.player;
     this.fadeOccluders(dt, p);
     this.view.follow(p.x + p.aimX * 1.2, p.z + p.aimZ * 1.2, dt, 5);
-    this.lights.follow(this.view.focus.x, this.view.focus.z);
+    if (!frozen) for (const t of this.timers.splice(0)) if ((t.t -= dt) <= 0) t.fn(); else this.timers.push(t);
     this.view.update(dt);
+    this.lights.follow(this.view.center.x, this.view.center.z);
     this.floaters.update(dt);
     this.updateReticle(dt);
     this.hud.update(dt);

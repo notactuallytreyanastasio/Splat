@@ -516,10 +516,22 @@ export class Mantis extends Creature {
     else if (this.state !== 'stunned' && info.team === 'player' && !['wall', 'boom'].includes(info.kind)) info.amount *= 0.45;
     info.amount = Math.round(info.amount);
     const ok = super.takeDamage({ ...info, lift: 0, stun: 0 });
-    if (ok && !this.phase2 && this.hp < this.maxHp * 0.5) { this.phase2 = true; this.game.onBossPhase(this); }
+    // Phase two starts at her next free moment (see think), never mid-attack: a telegraph
+    // already on the floor must still mean what it says.
+    if (ok && !this.phase2 && this.hp < this.maxHp * 0.5) this.enragePending = true;
     return ok;
   }
   get controllable() { return !this.airborne; }
+  sync(dt) {
+    // Enraged she twitches faster, and petals boil off her.
+    this.rig.enraged = this.phase2;
+    super.sync(this.phase2 ? dt * 1.5 : dt);
+    if (this.phase2 && !this.dead && dt > 0 && Math.random() < dt * 22) {
+      const a = Math.random() * TAU, r = 1.3 + Math.random() * 0.4, y = 0.4 + Math.random() * 2.2;
+      this.game.gore.confetti.spawn(this.x + Math.sin(a) * r, y, this.z + Math.cos(a) * r, Math.cos(a) * 3.2, 0.8 + Math.random(), -Math.sin(a) * 3.2,
+        { color: fx.pick([0xff2d6f, 0xff5fa2, 0xff9ecb, 0xffffff]), size: fx.f(0.07, 0.13), life: 1.1, gravity: 1.5, drag: 1.2 });
+    }
+  }
   update(dt) {
     const g = this.game, pl = g.nearestPlayer(this.x, this.z);
     this.stateT += dt; this.cooldown -= dt;
@@ -532,23 +544,42 @@ export class Mantis extends Creature {
   think(dt, pl) {
     const g = this.game, d = Math.hypot(pl.x - this.x, pl.z - this.z), fast = this.phase2 ? 1.35 : 1;
     const toX = (pl.x - this.x) / (d || 1), toZ = (pl.z - this.z) / (d || 1);
+    const heat = this.phase2 ? 2 : 1;
     switch (this.state) {
+      case 'intro':
+        // Her room just locked: she rears up and screeches while the camera looks at her.
+        this.action = 'rear'; this.actionP = this.stateT / 1.9;
+        this.faceToward(pl.x, pl.z, dt, 3);
+        if (this.stateT > 1.9) this.set('stalk');
+        break;
+      case 'enrage':
+        this.action = 'roar'; this.actionP = this.stateT / 1.2;
+        this.faceToward(pl.x, pl.z, dt, 2);
+        if (this.stateT > 1.2) { this.set('stalk'); this.cooldown = 0.3; }
+        break;
       case 'idle': case 'stalk': {
         this.state = 'stalk'; this.action = null;
+        if (this.enragePending) { this.enragePending = false; this.phase2 = true; this.set('enrage'); g.onBossPhase(this); break; }
         this.faceToward(pl.x, pl.z, dt, 4);
         if (d > 3) { this.desiredX = toX * 2.4 * fast; this.desiredZ = toZ * 2.4 * fast; }
         if (this.cooldown > 0) break;
         // Sweep when crowded, but never twice in a row: hugging her must not stall her pattern.
-        if (d < 4.2 && !this.justSwept) { this.justSwept = true; this.set('telegraph'); this.next = 'sweep'; this.tele = g.telegraphArc(this, 4.2, 3.6, 0.7 / fast); g.fx('sx', { n: 'screech', o: { pitch: 1.2 } }); break; }
+        // The arc fills exactly as the blades land (0.18s into the swing), not before.
+        if (d < 4.2 && !this.justSwept) { this.justSwept = true; this.set('telegraph'); this.next = 'sweep'; this.tele = g.telegraphArc(this, 4.2, 3.6, 0.7 / fast + 0.18, heat); g.fx('sx', { n: 'scythedraw', o: { pitch: fast } }); break; }
         this.justSwept = false;
         const pick = ['summon', 'charge', 'nova', 'summon', 'charge'][this.pattern++ % 5];
         if (pick === 'charge') {
           this.set('telegraph'); this.next = 'charge';
           this.lockX = toX; this.lockZ = toZ;
-          this.tele = g.telegraphLine(this.x, this.z, toX, toZ, 16, 1.6, 0.9 / fast);
-          g.fx('sx', { n: 'screech', o: { pitch: 0.8 } });
-        } else if (pick === 'nova') { this.set('cast'); this.next = 'nova'; }
-        else { this.set('cast'); this.next = 'summon'; }
+          // As wide as what she actually hits: her body plus a knight's.
+          this.tele = g.telegraphLine(this.x, this.z, toX, toZ, 16, 2 * (this.radius + 0.35), 0.9 / fast, heat);
+          g.fx('sx', { n: 'chargerev', o: { pitch: fast } });
+        } else if (pick === 'nova') {
+          this.set('cast'); this.next = 'nova';
+          // Hearts burst from this ring the moment it fills.
+          g.telegraphCircle(this.x, this.z, 2.2, 0.8 / fast, heat);
+          g.fx('sx', { n: 'novacharge', o: { pitch: fast } });
+        } else { this.set('cast'); this.next = 'summon'; g.fx('sx', { n: 'brood' }); }
         break;
       }
       case 'telegraph':
@@ -556,14 +587,15 @@ export class Mantis extends Creature {
         if (this.next === 'sweep') this.faceToward(pl.x, pl.z, dt, 3);
         else this.faceToward(this.x + this.lockX, this.z + this.lockZ, dt, 20);
         if (this.stateT >= (this.next === 'sweep' ? 0.7 : 0.9) / fast) {
-          if (this.next === 'sweep') { this.set('sweep'); this.swept = false; g.fx('sx', { n: 'swing', o: { pitch: 0.5 } }); }
-          else { this.set('charge'); g.fx('sx', { n: 'roar' }); }
+          if (this.next === 'sweep') { this.set('sweep'); this.swept = false; }
+          else { this.set('charge'); g.fx('sx', { n: 'bellow' }); }
         }
         break;
       case 'sweep':
         this.action = 'sweep'; this.actionP = this.stateT / 0.6;
         if (!this.swept && this.stateT > 0.18) {
           this.swept = true;
+          g.fx('sx', { n: 'scythe' });
           const a = this.facing;
           for (const e of g.world.query(this.x, this.z, 4.2, e => e !== this && ((e instanceof Player && !e.ghost) || e.team === 'enemy'))) {
             const ea = angleTo(this.x, this.z, e.x, e.z);
