@@ -21,7 +21,7 @@ import { TouchControls } from '../engine/ui/touch.js';
 import { parseLevel, buildLevelMeshes } from './level.js';
 import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from './actors.js';
 import { Gore } from './gore.js';
-import { Juice } from './juice.js';
+import { Juice, BUD_HATCH } from './juice.js';
 import { Hud } from './hud.js';
 import { defineSounds } from './sounds.js';
 import { rollBoons } from './boons.js';
@@ -70,6 +70,7 @@ export class Game {
     this.telegraphs = [];
     this.slashes = [];
     this.pending = [];
+    this.hatches = [];
     this.state = 'play';
     this.xp = 0; this.level_ = 1; this.gems = 0;
     this.streak = 0; this.streakT = 0; this.bestStreak = 0;
@@ -165,6 +166,7 @@ export class Game {
       case 'dc': return this.gore.decals.splat(d.x, d.z, d.r, d.c);
       case 'ws': return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
       case 'pf': return this.gore.puff(d.x, d.y, d.z, d.c);
+      case 'bud': return this.juice.bud(d.x, d.z, d.c);
       case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d);
       case 'tl': return this.telegraphLine_(d.x, d.z, d.dx, d.dz, d.l, d.w, d.d);
       case 'ta': { const src = this.world.byId.get(d.id); if (src) this.telegraphArc_(src, d.r, d.a, d.d); return; }
@@ -247,7 +249,7 @@ export class Game {
           if (k.remote) this.fx('tp', { to: k.pid, x, z }); else { k.x = x; k.z = z; }
         }
         r.enemies = r.enemies.filter(e => !e.dead);
-        if (r.enemies.length === 0) {
+        if (r.enemies.length === 0 && !r.hatching) {
           if (r.waves.length) this.spawnWave(r, r.waves.shift());
           else this.clearRoom(r);
         }
@@ -283,17 +285,33 @@ export class Game {
     } else this.fx('bn', { t: room.name?.toUpperCase() ?? 'AMBUSH', s: `${room.enemies.length} pretty little lives` });
     this.events.emit('roomStart', room);
   }
+  // Reinforcements hatch: a bud sprouts where each bug will be, shivers, and bursts open
+  // with the bug hopping out. The room stays locked while any bud is still closed.
   spawnWave(room, types) {
     const tiles = room.tiles.filter(([x, z]) => !this.map.isSolid(x, z) && this.players.every(k => Math.hypot(x + 0.5 - k.x, z + 0.5 - k.z) > 5));
+    const pool = tiles.length ? tiles : room.tiles.slice();
     for (const t of types) {
-      const [x, z] = this.rng.pick(tiles.length ? tiles : room.tiles);
-      const e = this.spawnEnemy(t, x + 0.5, z + 0.5, room, room.index);
-      e.active = true; e.y = 3; e.vy = -2;
-      room.enemies.push(e);
-      this.fx('cf', { x: x + 0.5, y: 1, z: z + 0.5, n: 20, p: 4 });
+      const i = this.rng.int(0, pool.length - 1), [x, z] = pool[i];
+      if (pool.length > 1) pool.splice(i, 1);
+      const c = this.rng.pick(RAINBOW);
+      this.fx('bud', { x: x + 0.5, z: z + 0.5, c });
+      room.hatching = (room.hatching ?? 0) + 1;
+      this.hatches.push({ t: BUD_HATCH, room, type: t, x: x + 0.5, z: z + 0.5 });
     }
-    this.fx('bn', { t: 'MORE BUGS!', s: 'they keep coming. good.' });
+    this.fx('bn', { t: 'MORE BUGS!', s: 'the flowers are hatching. good.' });
     this.fx('sx', { n: 'wave' });
+  }
+  updateHatches(dt) {
+    for (let i = this.hatches.length - 1; i >= 0; i--) {
+      const h = this.hatches[i];
+      if ((h.t -= dt) > 0) continue;
+      this.hatches.splice(i, 1);
+      h.room.hatching--;
+      const e = this.spawnEnemy(h.type, h.x, h.z, h.room, h.room.index);
+      e.active = true; e.y = 0.3; e.vy = 8; e.stun = 0.3;
+      h.room.enemies.push(e);
+      this.fx('sx', { n: 'bloom', o: { pitch: 0.9 + Math.random() * 0.3 } });
+    }
   }
   clearRoom(room) {
     room.active = false; room.cleared = true;
@@ -872,6 +890,7 @@ export class Game {
       this.flow.compute(this.player.x, this.player.z);
       this.world.update(dt);
       for (const f of this.pending.splice(0)) f();
+      if (!this.guest) this.updateHatches(dt);
       this.updateRooms(dt);
       if (this.net && !this.guest && this.players.length && this.players.every(k => k.ghost)) this.fx('lose', {});
     } else {
@@ -886,6 +905,7 @@ export class Game {
     this.coop?.update(dt);
     this.updateMusic(dt);
     this.gore.update(dt);
+    this.juice.update(dt);
     this.streakT -= dt;
     if (this.streakT <= 0 && this.streak) { this.streak = 0; this.fx('st', { n: 0 }); }
     this.gemComboT -= dt;

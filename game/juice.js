@@ -1,13 +1,17 @@
-// Moment-to-moment feel that is not a rule: footstep dust, the roll puff, and the ribbon
-// the blade tip leaves.
+// Moment-to-moment feel that is not a rule: footstep dust, the roll puff, the ribbon the
+// blade tip leaves, and the flower buds reinforcements hatch from.
 //
-// All of it is derived from a knight's own pose every frame, so every peer draws it for
-// every knight without any network traffic.
+// Footsteps, rolls and the ribbon are derived from a knight's own pose every frame, so
+// every peer draws them for every knight without any network traffic. Buds are host
+// decisions and arrive through game.fx('bud').
 //
 // Cost: dust borrows the blood particle pool (no new draw call); a ribbon is one draw
-// call per knight and only while swinging. Nothing here allocates per frame.
+// call per knight and only while swinging; every bud on screen shares two instanced
+// draw calls (fill + ink outline). Nothing here allocates per frame.
 import * as THREE from 'three';
+import { geo, toonMaterial, INK } from '../engine/render/toon.js';
 import { fx } from '../engine/core/rng.js';
+import { RAINBOW } from './models.js';
 
 // Dusky lilac and rose rather than white: white puffs disappear on the pale tiles.
 const DUST = [0xd9c8ec, 0xe9cfe0, 0xcdbfe0, 0xf0dccf];
@@ -63,11 +67,87 @@ class Ribbon {
   dispose() { this.mesh.parent?.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); }
 }
 
+// ------------------------------------------------------------------ flower buds
+// One instanced mesh for every petal, leaf and stamen on screen, and a second one in
+// ink for their outlines. The engine's outline shader ignores instancing, so this one
+// applies instanceMatrix itself.
+const PARTS = 8, MAX_BUDS = 24;
+const BUD_LIFE = 2.0;
+export const BUD_HATCH = 0.85; // seconds from sprout to the bug popping out
+function instancedOutline(thick) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uThick: { value: thick }, uColor: { value: new THREE.Color(INK) } },
+    vertexShader: `uniform float uThick;
+      void main() {
+        mat4 m = modelViewMatrix * instanceMatrix;
+        vec4 mv = m * vec4(position, 1.0);
+        vec3 n = normalize(mat3(m) * normal);
+        mv.xyz += n * uThick * (-mv.z / 20.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; void main() { gl_FragColor = vec4(uColor, 1.0); }`,
+    side: THREE.BackSide,
+  });
+}
+class Buds {
+  constructor(scene) {
+    const n = MAX_BUDS * PARTS;
+    this.fill = new THREE.InstancedMesh(geo.sphere(), toonMaterial(0xffffff), n);
+    this.ink = new THREE.InstancedMesh(geo.sphere(), instancedOutline(0.03), n);
+    for (const m of [this.fill, this.ink]) { m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0; m.visible = false; scene.add(m); }
+    this.fill.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    this.list = [];
+    this.o = new THREE.Object3D(); this.o.rotation.order = 'YXZ';
+  }
+  add(x, z, color) {
+    if (this.list.length >= MAX_BUDS) this.list.shift();
+    this.list.push({ x, z, t: 0, yaw: fx.f(0, 6.28), color, popped: false });
+  }
+  // Petal angle: 1.22 rad is closed (standing up), 0 lies flat on the floor.
+  // One part of the current bud: a squashed sphere hinged at the bud's centre.
+  put(k, yaw, tilt, reach, sx, sy, sz, color, y0) {
+    const o = this.o, b = this.bud, s = this.s, r = reach * s;
+    o.rotation.set(-tilt, yaw, this.shiver * (k % 2 ? 1 : -1));
+    o.position.set(b.x + Math.sin(yaw) * Math.cos(tilt) * r, y0 + Math.sin(tilt) * r, b.z + Math.cos(yaw) * Math.cos(tilt) * r);
+    o.scale.set(sx * s, sy * s, sz * s);
+    o.updateMatrix();
+    this.fill.setMatrixAt(k, o.matrix); this.ink.setMatrixAt(k, o.matrix); this.fill.setColorAt(k, _c.set(color));
+    return k + 1;
+  }
+  update(dt, onPop) {
+    const F = this.fill, I = this.ink;
+    let k = 0;
+    for (let b = this.list.length - 1; b >= 0; b--) if ((this.list[b].t += dt) > BUD_LIFE) this.list.splice(b, 1);
+    for (const bud of this.list) {
+      const t = bud.t;
+      if (!bud.popped && t >= BUD_HATCH) { bud.popped = true; onPop?.(bud); }
+      // Sprout with an overshoot, swell and shiver while something kicks inside, burst
+      // open past flat, settle, then sink away.
+      const grow = t < 0.22 ? backOut(t / 0.22) : 1;
+      const sink = t > BUD_LIFE - 0.45 ? Math.max(0, (BUD_LIFE - t) / 0.45) : 1;
+      const pre = Math.max(0, Math.min(1, (t - 0.22) / (BUD_HATCH - 0.22)));
+      const shiver = t < BUD_HATCH ? Math.sin(t * 60) * 0.12 * pre : 0;
+      const swell = 1 + (t < BUD_HATCH ? pre * pre * 0.35 : 0);
+      const open = t < BUD_HATCH ? 1.22 - pre * 0.1 : 0.1 + 1.13 * Math.exp(-(t - BUD_HATCH) * 9) * Math.cos((t - BUD_HATCH) * 22);
+      this.bud = bud; this.s = grow * sink; this.shiver = shiver;
+      for (let i = 0; i < 2; i++) k = this.put(k, bud.yaw + 0.6 + i * Math.PI, 0.04, 0.34, 0.24, 0.07, 0.56, 0x9fe3a8, 0.02);
+      for (let i = 0; i < 5; i++) k = this.put(k, bud.yaw + i * 1.2566, open, 0.26 * swell, 0.3 * swell, 0.11, 0.56 * swell, bud.color, 0.04);
+      k = this.put(k, 0, Math.PI / 2, 0.05, 0.24 * swell, 0.24 * swell, 0.24 * swell, 0xfff1a1, 0.04);
+    }
+    F.count = I.count = k;
+    F.visible = I.visible = k > 0;
+    if (k) { F.instanceMatrix.needsUpdate = I.instanceMatrix.needsUpdate = true; F.instanceColor.needsUpdate = true; }
+  }
+}
+const backOut = t => { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+
 // ------------------------------------------------------------------ the kit
 export class Juice {
   constructor(game) {
     this.g = game;
     this.ribbons = new Map();
+    this.buds = new Buds(game.scene);
+    this.onPop = b => game.gore.confettiBurst(b.x, 0.5, b.z, 16, 4, [b.color, 0xffffff, 0x9fe3a8]);
   }
   dust(x, z, vx, vz, n, size, life = 0.45) {
     const pool = this.g.gore.blood;
@@ -102,4 +182,8 @@ export class Juice {
     p.wasRolling = rolling;
   }
   forget(p) { this.ribbons.get(p)?.dispose(); this.ribbons.delete(p); }
+  bud(x, z, c) { this.buds.add(x, z, c ?? fx.pick(RAINBOW)); }
+  update(dt) {
+    this.buds.update(dt, this.onPop);
+  }
 }
