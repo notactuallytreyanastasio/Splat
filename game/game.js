@@ -161,7 +161,7 @@ export class Game {
       case 'cf': return this.gore.confettiBurst(d.x, d.y, d.z, d.n, d.p, d.c);
       case 'sp': return this.gore.spray(d.x, d.y, d.z, d.dx, d.dz, d.n, d.p, d.c);
       case 'dc': return this.gore.decals.splat(d.x, d.z, d.r, d.c);
-      case 'ws': this.addHeat(0.08); return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
+      case 'ws': this.addHeat(0.06); return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
       case 'pf': return this.gore.puff(d.x, d.y, d.z, d.c);
       case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d);
       case 'tl': return this.telegraphLine_(d.x, d.z, d.dx, d.dz, d.l, d.w, d.d);
@@ -364,7 +364,7 @@ export class Game {
     const mine = !this.net || d.src === this.localId;
     const info = { amount: d.a, dirX: d.dx, dirZ: d.dz, knock: d.k, kind: d.kind, crit: !!d.c };
     if (this.guest) t.flash = 1;
-    this.addHeat(0.012 + d.a * 0.0006 + (d.kind === 'impact' ? 0.04 : 0));
+    if (d.kind !== 'whirl') this.addHeat(0.005 + d.a * 0.0003 + (d.kind === 'impact' ? 0.03 : 0));
     this.gore.hit(t, info);
     const big = BIG[d.kind];
     // Hitstop freezes the whole simulation, so in co-op only your own blows stop time.
@@ -431,7 +431,7 @@ export class Game {
     const t = this.world.byId.get(d.id);
     if (!t || !t.rig) return;
     this.bodyCount = (this.bodyCount ?? 0) + 1;
-    this.addHeat(d.o ? 0.2 : 0.14);
+    this.addHeat(d.o ? 0.13 : 0.09);
     t.dead = true;
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
@@ -937,9 +937,9 @@ export class Game {
   updateGrade(dt) {
     const g = this.view.grade, p = this.player;
     this.heatT = (this.heatT ?? 0) + dt;
-    this.heat = Math.max(0, (this.heat ?? 0) - dt * (this.heatT > 0.9 ? 0.5 : 0.06));
-    const sat = 1 - Math.min(1, this.heat) * 0.85;
-    if (this.heat >= 1) this.noirOn = true; else if (this.heat < 0.55) this.noirOn = false;
+    this.heat = Math.max(0, (this.heat ?? 0) - dt * (this.heatT > 0.7 ? 0.6 : 0.2));
+    const sat = 1 - Math.min(1, this.heat) * 0.8;
+    if (this.heat >= 1.1) this.noirOn = true; else if (this.heat < 0.7) this.noirOn = false;
     const noir = this.state === 'play' && !p.ghost && (this.noirOn || p.state === 'whirl') ? 1 : 0;
     g.sat += (sat - g.sat) * Math.min(1, dt * (sat > g.sat ? 3 : 2));
     g.noir += (noir - g.noir) * Math.min(1, dt * (noir ? 6 : 2.5));
