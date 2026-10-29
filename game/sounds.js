@@ -31,5 +31,8 @@ export function defineSounds(s) {
   s.define('summon', (s, t) => [880, 660, 990].forEach((f, i) => s.tone(t + i * 0.1, { type: 'triangle', f0: f, dur: 0.15, vol: 0.1 })));
   s.define('parry', (s, t) => { s.tone(t, { type: 'triangle', f0: 1568, dur: 0.5, vol: 0.22 }); s.tone(t, { type: 'sine', f0: 2349, dur: 0.35, vol: 0.12 }); s.tone(t + 0.04, { type: 'sine', f0: 3136, dur: 0.25, vol: 0.06 }); });
   s.define('noir', (s, t) => { s.tone(t, { type: 'sine', f0: 110, f1: 55, dur: 1.2, vol: 0.35 }); s.noise(t, { dur: 0.8, vol: 0.12, f0: 300, f1: 80, type: 'lowpass' }); s.tone(t + 0.05, { type: 'triangle', f0: 880, f1: 440, dur: 0.6, vol: 0.06 }); });
+  // Tutorial: a bright little 'got it' for each lesson, and a soft chime for the next card.
+  s.define('sting', (s, t) => { [784, 988, 1175, 1568].forEach((f, i) => s.tone(t + i * 0.055, { type: 'triangle', f0: f, dur: 0.35, vol: 0.15 })); s.tone(t + 0.22, { type: 'sine', f0: 2349, f1: 3136, dur: 0.4, vol: 0.07 }); s.noise(t, { dur: 0.25, vol: 0.1, f0: 5000, f1: 9000, q: 2 }); });
+  s.define('card', (s, t) => { s.tone(t, { type: 'sine', f0: 660, dur: 0.12, vol: 0.09 }); s.tone(t + 0.07, { type: 'sine', f0: 990, dur: 0.2, vol: 0.09 }); });
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
 }

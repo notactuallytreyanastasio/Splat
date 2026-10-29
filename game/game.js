@@ -29,6 +29,7 @@ import { Bot } from './bot.js';
 import { Telemetry } from './telemetry.js';
 import { RAINBOW, goreChunk } from './models.js';
 import { Coop, TINTS } from './coop.js';
+import { Tutorial } from './tutorial.js';
 
 const STREAKS = { 2: 'Double Tap!', 3: 'Triple Treat!', 4: 'Bug Splat Party!', 5: 'Petal Massacre!', 7: 'RAINBOW CARNAGE!', 10: 'EXTERMINATRIX!!', 15: 'APOCALYPSE PICNIC!!!' };
 const ROOM_NAMES = ['the Petal Foyer', 'the Mushroom Court', 'the Beetle Den', "the Empress's Bower"];
@@ -96,6 +97,7 @@ export class Game {
     ]);
     this.coop = this.net ? new Coop(this, this.net) : null;
     this.bot = opts.bot ? new Bot(this, opts.botskill ?? 1) : null;
+    this.tutorial = opts.tutorial && !this.net ? new Tutorial(this, levelJson) : null;
     this.intent = emptyIntent();
     if (opts.start != null && !this.guest) this.skipToRoom(+opts.start);
     this.view.snap(this.player.x, this.player.z);
@@ -104,12 +106,13 @@ export class Game {
     this.loop.start();
     this.started = !!opts.bot;
     if (this.started) this.begin();
+    else if (this.tutorial) this.tutorial.intro(() => { this.sfx.unlock(); this.started = true; this.begin(); });
     else this.hud.title(() => { this.sfx.unlock(); this.started = true; this.begin(); }, this.net);
   }
   begin() {
     document.body.classList.add('playing');
     this.applyAudioMode();
-    if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
+    if (!this.guest && !this.tutorial) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
   // all -> sfx only -> silent. Remembered per browser.
   cycleAudio() {
     this.audioMode = { all: 'sfx', sfx: 'off', off: 'all' }[this.audioMode];
@@ -703,6 +706,7 @@ export class Game {
   xpNeed() { return 10 + this.level_ * 8; }
   levelUp() {
     this.xp -= this.xpNeed();
+    if (this.tutorial) return; // no boon pause in the middle of a lesson
     this.level_++;
     this.telemetry.levelUp();
     this.offerBoon();
@@ -877,6 +881,7 @@ export class Game {
       this.world.update(dt);
       for (const f of this.pending.splice(0)) f();
       this.updateRooms(dt);
+      this.tutorial?.update(dt);
       if (this.net && !this.guest && this.players.length && this.players.every(k => k.ghost)) this.fx('lose', {});
     } else {
       // Dead or won: bodies keep settling but nothing thinks.
@@ -987,6 +992,7 @@ export class Game {
     this.floaters.update(dt);
     this.updateReticle(dt);
     this.hud.update(dt);
+    this.tutorial?.render(dt);
     if (this.touch.active) {
       const pl = this.player;
       this.touch.setLabel('special', pl.rage >= 100 ? icon('rainbow') : `${icon('rainbow')}<small>${Math.floor(pl.rage)}%</small>`, pl.rage >= 100);

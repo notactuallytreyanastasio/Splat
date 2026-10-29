@@ -2,6 +2,7 @@
 // boon picker and end screen.
 import { icon } from './icons.js';
 
+import { ICONS } from './tutorial.js';
 export class Hud {
   constructor(game) {
     this.g = game;
@@ -22,7 +23,7 @@ export class Hud {
         <div class="keys"><b>WASD</b> move <b>mouse</b> aim <b>LMB</b> slash combo <b>RMB</b> batter-up <b>E</b> grab &amp; throw <b>SPACE</b> roll <b>Q</b> rainbow blender <b>R</b> potion <b>SHIFT</b> parry <b>TAB</b> lock <b>M</b> sound</div>
         <p class="tip">anything you hit hard enough becomes a projectile. so do the bodies.</p>
         <button>click to start squishing</button>
-        <div class="modes"><button class="coop" type="button">host co-op</button><form class="join"><input name="code" placeholder="room code" maxlength="12"><button type="submit">join</button></form></div>
+        <div class="modes"><button class="howto" type="button">${ICONS.howto}how to play</button><button class="coop" type="button">host co-op</button><form class="join"><input name="code" placeholder="room code" maxlength="12"><button type="submit">join</button></form></div>
         <small>gamepad works too · up to 4 knights in co-op</small></div>
       <button class="audio" type="button" aria-label="sound"></button>
       <div class="cue"><i></i><b>!</b></div>
@@ -124,6 +125,7 @@ export class Hud {
       t.querySelector('button').textContent = net.isHost ? 'start the massacre' : 'jump in';
     } else {
       // Co-op stays hidden until its server channel is live (?beta shows it).
+      t.querySelector('.howto').onclick = e => { e.stopPropagation(); location.search = '?tutorial'; };
       t.querySelector('.coop').onclick = () => { const code = Math.random().toString(36).slice(2, 6).toUpperCase(); location.search = '?coop=' + code; };
       t.querySelector('.join').onsubmit = e => { e.preventDefault(); const c = e.target.code.value.trim().toUpperCase(); if (c) location.search = '?coop=' + encodeURIComponent(c); };
     }

@@ -6,8 +6,10 @@ const num = k => (q.has(k) ? +q.get(k) : undefined);
 const status = msg => { const el = document.getElementById('hud'); el.innerHTML = `<div class="lobby">${msg}</div>`; };
 const NAMES = ['Petal', 'Stinger', 'Gumdrop', 'Thimble', 'Mothball', 'Sprinkle', 'Bramble', 'Nectar', 'Pip', 'Clover'];
 
-let level = q.get('level') || 'garden', seed = num('seed'), net = null;
 const coop = q.get('coop');
+// ?tutorial: the How to play lessons on their own little lawn (solo only).
+const tutorial = q.has('tutorial') && !coop;
+let level = tutorial ? 'tutorial' : q.get('level') || 'garden', seed = num('seed'), net = null;
 if (coop) {
   // Co-op: join the room on the blog's Phoenix server. The earliest player hosts;
   // a guest takes the seed and level from the host's first world snapshot.
@@ -27,7 +29,7 @@ const json = level.startsWith('local:')
   : await (await fetch(`game/levels/${level}.json`, { cache: 'no-store' })).json();
 document.getElementById('hud').innerHTML = '';
 const game = new Game(document.getElementById('game'), json, {
-  seed, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'),
+  seed, levelName: level, net, bot: q.has('bot'), speed: num('speed'), god: q.has('god'), start: num('start'), difficulty: num('difficulty'), botskill: num('botskill'), perf: q.has('perf'), tutorial,
 });
 // Debug/automation surface used by tools/playtest.mjs.
 window.__game = game;

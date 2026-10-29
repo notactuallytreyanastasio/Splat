@@ -245,6 +245,75 @@
     .boons .card > b { align-self: end; } .boons .card > small { align-self: start; }
   }
   @media (prefers-reduced-motion: reduce) { .boons *, .boons, .potions .ic, .roster .ic, .touch .ic { animation: none !important; } }
+  /* How to play: one lesson card at a time, top centre. Only the skip button takes clicks. */
+  .title .modes .howto { display: inline-flex; align-items: center; gap: 6px; background: var(--lemon); }
+  .title .modes .howto svg { width: 24px; height: 24px; }
+  body.tutorial .help { display: none; }
+  body.tutorial .banner { top: 30%; }
+  @media (orientation: portrait) { body.tutorial .banner { top: 36%; } }
+  .tut { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: min(580px, calc(100vw - 32px)); pointer-events: none; z-index: 4; }
+  body.touching .tut { top: calc(env(safe-area-inset-top) + 64px); }
+  @media (orientation: portrait) { body.touching .tut { top: calc(env(safe-area-inset-top) + 104px); } }
+  .tut-card { position: relative; display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; padding: 14px 20px 22px 14px;
+    background: var(--cream); border: 5px solid var(--ink); border-radius: 24px; box-shadow: 0 7px 0 var(--ink); transition: background .2s; }
+  .tut-card.in { animation: tutin .5s cubic-bezier(.2, 1.5, .4, 1) both; }
+  .tut-card.out { animation: tutout .26s ease-in forwards; }
+  .tut-card.done { background: #dcfaec; }
+  @keyframes tutin { from { transform: translateY(-150%) rotate(-4deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes tutout { to { transform: translateY(-140%) rotate(3deg); opacity: 0; } }
+  .tut-icon { width: 64px; height: 64px; border-radius: 50%; background: #ffe3ee; border: 4px solid var(--ink); display: grid; place-items: center; overflow: hidden; }
+  .tut-icon svg { width: 48px; height: 48px; }
+  .tut-card.in .tut-icon { animation: tutwob .7s .25s both; }
+  @keyframes tutwob { 0% { transform: scale(.4) rotate(-20deg); } 60% { transform: scale(1.15) rotate(6deg); } 100% { transform: none; } }
+  .tut-text .kicker { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--pink); }
+  .tut-text h3 { margin: 0; font-size: 24px; line-height: 1.1; }
+  .tut-text p { margin: 5px 0 0; font-size: 16px; line-height: 1.6; font-weight: 500; }
+  .tut kbd { display: inline-block; min-width: 26px; padding: 0 7px; margin: 0 2px; border: 3px solid var(--ink); border-radius: 8px; background: #fff; box-shadow: 0 3px 0 var(--ink);
+    font: 700 14px/20px Fredoka, system-ui; text-align: center; vertical-align: 1px; }
+  .tut .mouse { width: 18px; height: 25px; vertical-align: -7px; margin: 0 2px; }
+  .tut .chip { display: inline-grid; place-items: center; height: 28px; min-width: 28px; padding: 0 9px; margin: 0 2px; border: 3px solid var(--ink); border-radius: 14px;
+    background: #fff; box-shadow: 0 3px 0 var(--ink); font: 700 12px/1 Fredoka, system-ui; vertical-align: -4px; }
+  .tut .chip.slash { background: #ffd6e8; } .tut .chip.parry { background: #fff6c8; }
+  .tut .chip.rage { padding: 0 4px; } .tut .chip.rage svg { width: 34px; height: 22px; }
+  .tut-count { font-size: 30px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .tut-count b { display: inline-block; color: var(--pink); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; font-size: 38px; }
+  .tut-count b.bump { animation: pop .3s; }
+  .tut-check { position: absolute; right: -18px; top: -18px; width: 58px; height: 58px; transform: scale(0) rotate(-40deg); transition: transform .35s cubic-bezier(.2, 1.8, .4, 1); }
+  .tut-check svg { width: 100%; height: 100%; filter: drop-shadow(0 4px 0 var(--ink)); }
+  .tut-card.done .tut-check { transform: scale(1) rotate(-8deg); }
+  .tut-pips { position: absolute; left: 50%; bottom: -11px; transform: translateX(-50%); display: flex; gap: 6px; }
+  .tut-pips i { width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--ink); background: #fff; transition: background .2s, transform .2s; }
+  .tut-pips i.on { background: var(--pink); } .tut-pips i.now:not(.on) { background: var(--lemon); animation: throb .5s infinite alternate; }
+  .tut-skip { position: absolute; top: -13px; left: 22px; pointer-events: auto; padding: 1px 10px; border: 3px solid var(--ink); border-radius: 10px; background: #fff;
+    font: 700 12px Fredoka, system-ui; color: var(--ink); cursor: pointer; opacity: .85; }
+  .tut-skip:hover { opacity: 1; background: #ffe3ee; }
+  .tut-conf { position: absolute; top: 40%; width: 9px; height: 14px; border: 2px solid var(--ink); border-radius: 2px; pointer-events: none; animation: tutconf .95s cubic-bezier(.15, .7, .4, 1) forwards; }
+  @keyframes tutconf { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(var(--dx), calc(var(--dy) + 60px)) rotate(var(--r)); opacity: 0; } }
+  .tut-arrow { position: absolute; left: 0; top: 0; width: 0; height: 0; display: none; pointer-events: none; }
+  .tut-arrow.on { display: block; }
+  .tut-arrow svg { position: absolute; width: 54px; height: 54px; margin: -27px 0 0 -27px; filter: drop-shadow(0 4px 0 var(--ink)); animation: tutnudge .5s infinite alternate ease-in-out; }
+  @keyframes tutnudge { to { transform: translateX(8px); } }
+  .tut-modal { position: absolute; inset: 0; display: grid; place-content: center; padding: 16px; background: radial-gradient(circle, rgba(255,246,251,.72), rgba(255,214,232,.9)); pointer-events: auto; text-align: center; z-index: 7; }
+  .tut-modal .sheet { position: relative; width: min(540px, calc(100vw - 32px)); padding: 46px 26px 24px; background: var(--cream); border: 6px solid var(--ink); border-radius: 30px; box-shadow: 0 10px 0 var(--ink); animation: tutin .55s cubic-bezier(.2, 1.5, .4, 1) both; }
+  .tut-modal .badge { position: absolute; left: 50%; top: -46px; width: 88px; height: 88px; margin-left: -44px; border-radius: 50%; background: #ffe3ee; border: 5px solid var(--ink); box-shadow: 0 6px 0 var(--ink); display: grid; place-items: center; animation: tutwob .8s .2s both; }
+  .tut-modal.win .badge { background: #dcfaec; }
+  .tut-modal .badge svg { width: 62px; height: 62px; }
+  .tut-modal h1 { margin: 0; font-size: clamp(36px, 8vw, 54px); color: #fff; -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill; letter-spacing: 2px; transform: rotate(-2deg); }
+  .tut-modal p { margin: 8px auto 16px; max-width: 420px; font-size: 18px; line-height: 1.45; font-weight: 500; }
+  .tut-modal .lessons { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 18px; }
+  .tut-modal .lessons i { width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--ink); background: #fff; display: grid; place-items: center; }
+  .tut-modal .lessons i:nth-child(odd) { background: #ffe3ee; } .tut-modal .lessons i:nth-child(even) { background: #ece3ff; }
+  .tut-modal .lessons svg { width: 32px; height: 32px; }
+  .tut-modal .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .tut-modal .btns button { padding: 12px 26px; font: 700 22px Fredoka, system-ui; color: var(--ink); background: #fff; border: 5px solid var(--ink); border-radius: 20px; box-shadow: 0 7px 0 var(--ink); cursor: pointer; }
+  .tut-modal .btns .go { color: #fff; background: var(--pink); animation: throb .7s infinite alternate; }
+  .tut-modal .btns button:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--ink); animation: none; }
+  .tut-modal .back { margin-top: 16px; padding: 0; border: 0; background: none; font: 700 14px Fredoka, system-ui; color: var(--ink); opacity: .6; text-decoration: underline; cursor: pointer; }
+  @media (max-width: 520px) { .tut-modal .lessons { max-width: 216px; margin-left: auto; margin-right: auto; } .tut-card { grid-template-columns: 46px 1fr auto; gap: 10px; padding: 12px 14px 20px 10px; } .tut-icon { width: 46px; height: 46px; } .tut-icon svg { width: 34px; height: 34px; }
+    .tut-text h3 { font-size: 19px; } .tut-text p { font-size: 14px; line-height: 1.55; } .tut-count b { font-size: 30px; } .tut-count { font-size: 22px; } }
+  @media (max-height: 460px) { .tut-text p { font-size: 13px; line-height: 1.45; } .tut-text h3 { font-size: 18px; } .tut-text .kicker { display: none; } .tut .chip { height: 24px; } .tut kbd { line-height: 16px; }
+    .tut-card { grid-template-columns: 44px 1fr auto; gap: 10px; padding: 8px 16px 16px 10px; } .tut-icon { width: 44px; height: 44px; } .tut-icon svg { width: 32px; height: 32px; } .tut-count b { font-size: 28px; } .tut-count { font-size: 20px; }
+    .tut-modal .sheet { padding: 40px 20px 16px; } .tut-modal p { font-size: 15px; margin: 4px auto 10px; } .tut-modal .lessons { margin-bottom: 10px; } .tut-modal .lessons i { width: 36px; height: 36px; } .tut-modal .lessons svg { width: 24px; height: 24px; } .tut-modal h1 { font-size: 34px; } }
 </style>
 </head>
 <body>
