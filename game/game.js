@@ -18,6 +18,7 @@ import { Music } from '../engine/audio/music.js';
 import { defineMusic } from './music.js';
 import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
+import { disposeTree } from '../engine/render/dispose.js';
 import { parseLevel, buildLevelMeshes, bumpMushroom, updateMushrooms } from './level.js';
 import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from './actors.js';
 import { Gore } from './gore.js';
@@ -869,7 +870,7 @@ export class Game {
     this.view.focusOn({ x: t.x, z: t.z }, { ease: 0.3, hold: 2, out: 0.7, zoom: 0.38, lift: 0.8 });
     this.hud.cinema(4.4);
     // Her attack is cancelled by dying; its warning goes with it.
-    for (const tg of this.telegraphs.splice(0)) this.scene.remove(tg.mesh);
+    for (const tg of this.telegraphs.splice(0)) { this.scene.remove(tg.mesh); disposeTree(tg.mesh); }
     this.threat = Infinity; // and so is the parry cue it was driving
     this.hud.flash('rgba(255,255,255,.85)');
     this.sfx.play('bossdie');
@@ -1103,6 +1104,7 @@ export class Game {
   }
   playerDie(info) {
     const p = this.player;
+    if (p.holding) { const h = p.holding; p.holding = null; h.carried = null; h.stun = 1; h.vy = 4; }
     this.gore.kill(p, { ...info, knock: 10 }, true);
     this.sfx.play('death');
     this.telemetry.death(info);
@@ -1261,7 +1263,7 @@ export class Game {
       const t = this.telegraphs[i];
       t.t += dt;
       t.update?.(Math.min(1, t.t / t.dur));
-      if (t.t >= t.dur) { this.scene.remove(t.mesh); this.telegraphs.splice(i, 1); }
+      if (t.t >= t.dur) { this.scene.remove(t.mesh); disposeTree(t.mesh); this.telegraphs.splice(i, 1); }
     }
     for (let i = this.slashes.length - 1; i >= 0; i--) {
       const s = this.slashes[i];
@@ -1269,7 +1271,7 @@ export class Game {
       if (s.ring) { s.g.material.opacity = 0.9 * (1 - s.t / s.dur); s.g.scale.setScalar(1 + (s.t / s.dur) * 3); }
       else if (s.yank) s.g.scale.set(Math.max(0.01, 1 - s.t / s.dur), 1, 1);
       else { s.g.children[0].material.opacity = 0.85 * (1 - s.t / s.dur); s.g.scale.setScalar(0.8 + (s.t / s.dur) * 0.3); }
-      if (s.t >= s.dur) { this.scene.remove(s.g); this.slashes.splice(i, 1); }
+      if (s.t >= s.dur) { this.scene.remove(s.g); disposeTree(s.g); this.slashes.splice(i, 1); }
     }
     this.telemetry.update(dt);
     this.input.endStep();

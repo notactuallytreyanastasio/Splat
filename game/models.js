@@ -409,6 +409,7 @@ export function mantis() {
 
 // ------------------------------------------------------------------ gore pieces (shared kit)
 const gore = new ToonKit();
+gore.shared = true; // chunks and blobs all share these materials
 export function goreChunk(kind) {
   const g = new THREE.Group();
   if (kind === 'meat') {

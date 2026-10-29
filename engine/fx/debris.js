@@ -5,8 +5,8 @@ import * as THREE from 'three';
 const _w = new THREE.Quaternion(), _wp = new THREE.Vector3();
 
 export class Debris {
-  constructor(scene, { max = 140, floorY = 0, solidAt = null } = {}) {
-    Object.assign(this, { scene, max, floorY, solidAt });
+  constructor(scene, { max = 140, floorY = 0, solidAt = null, dispose = null } = {}) {
+    Object.assign(this, { scene, max, floorY, solidAt, dispose });
     this.items = [];
     this.onSettle = null; // (item) => true to take it out of the simulation
   }
@@ -32,10 +32,12 @@ export class Debris {
       if (it.sink) {
         it.sink += dt;
         o.scale.multiplyScalar(Math.max(0, 1 - dt * 3));
-        if (it.sink > 0.8) { this.scene.remove(o); this.items.splice(i, 1); }
+        if (it.sink > 0.8) { this.scene.remove(o); this.dispose?.(o); this.items.splice(i, 1); }
         continue;
       }
       if (it.rest > 0.4) {
+        // A piece that came down on a wall top or outside the level is not part of the floor.
+        if (!it.checked) { it.checked = true; if (this.solidAt?.(p.x, p.z)) { it.sink = 0.001; continue; } }
         it.rest += dt;
         if (it.rest > 1.2 && !it.proj && this.onSettle?.(it)) this.items.splice(i, 1);
         continue;
@@ -54,7 +56,9 @@ export class Debris {
           it.v.y *= -it.bounce;
           it.w.multiplyScalar(0.6);
         } else it.v.y = 0;
-        it.v.x *= it.friction ?? 0.82; it.v.z *= it.friction ?? 0.82;
+        // Per-contact friction tuned at 60fps, scaled so slow frames do not roll pieces further.
+        const fr = Math.pow(it.friction ?? 0.82, dt * 60);
+        it.v.x *= fr; it.v.z *= fr;
         it.w.multiplyScalar(0.9);
       }
       const wl = it.w.length();

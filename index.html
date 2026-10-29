@@ -273,6 +273,10 @@
   .touch .tb.parry.lit { background: #fff1a1; animation: throb .12s infinite alternate; box-shadow: 0 5px 0 var(--ink), 0 0 24px #fff1a1; }
   .touch .tb.small { --s: clamp(40px, 8vmin, 60px); font-size: 11px; }
   .perf { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font: 12px monospace; background: #3a2346; color: #fff; padding: 2px 8px; border-radius: 6px; z-index: 9; }
+  /* Co-op on touch: the live level-up cards sit at the top, clear of both thumbs. */
+  body.touching .boons.live { place-content: start center; padding: calc(env(safe-area-inset-top) + 96px) 8px 0; }
+  body.touching .boons.live .card { width: 132px; padding: 8px; }
+  body.touching .boons.live .card > small { display: none; }
   .help { position: absolute; top: 10px; left: 12px; font-size: 13px; opacity: .7; font-weight: 500; }
   /* Hand-drawn icons (game/icons.js). Ink width is inherited from the <svg>, so small
      placements thicken it to keep the outline about 2px on screen. */

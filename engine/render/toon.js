@@ -60,6 +60,7 @@ export function outlineMaterial(thick = 0.035, color = INK) {
       uniforms: { uThick: { value: thick }, uColor: { value: new THREE.Color(color) }, uAlpha: { value: 1 } },
       vertexShader: outlineVert, fragmentShader: outlineFrag, side: THREE.BackSide,
     }));
+    outlineCache.get(key).userData.shared = true;
   }
   return outlineCache.get(key);
 }
@@ -74,17 +75,18 @@ export function withOutline(mesh, thick = 0.035) {
 
 // Shared unit geometries. Parts are scaled instances of these.
 const G = {};
+const shared = g => { g.userData.shared = true; return g; };
 export const geo = {
-  sphere: () => (G.sphere ??= new THREE.SphereGeometry(0.5, 11, 8)),
-  lowSphere: () => (G.lowSphere ??= new THREE.IcosahedronGeometry(0.5, 1)),
-  capsule: () => (G.capsule ??= new THREE.CapsuleGeometry(0.5, 1, 4, 10)),
-  cylinder: () => (G.cylinder ??= new THREE.CylinderGeometry(0.5, 0.5, 1, 12)),
-  cone: () => (G.cone ??= new THREE.ConeGeometry(0.5, 1, 12)),
-  box: () => (G.box ??= new RoundedBoxGeometry(1, 1, 1, 2, 0.12)),
-  sharpBox: () => (G.sharpBox ??= new THREE.BoxGeometry(1, 1, 1)),
-  torus: () => (G.torus ??= new THREE.TorusGeometry(0.5, 0.18, 8, 16)),
-  heart: () => (G.heart ??= heartGeometry()),
-  star: () => (G.star ??= starGeometry()),
+  sphere: () => (G.sphere ??= shared(new THREE.SphereGeometry(0.5, 11, 8))),
+  lowSphere: () => (G.lowSphere ??= shared(new THREE.IcosahedronGeometry(0.5, 1))),
+  capsule: () => (G.capsule ??= shared(new THREE.CapsuleGeometry(0.5, 1, 4, 10))),
+  cylinder: () => (G.cylinder ??= shared(new THREE.CylinderGeometry(0.5, 0.5, 1, 12))),
+  cone: () => (G.cone ??= shared(new THREE.ConeGeometry(0.5, 1, 12))),
+  box: () => (G.box ??= shared(new RoundedBoxGeometry(1, 1, 1, 2, 0.12))),
+  sharpBox: () => (G.sharpBox ??= shared(new THREE.BoxGeometry(1, 1, 1))),
+  torus: () => (G.torus ??= shared(new THREE.TorusGeometry(0.5, 0.18, 8, 16))),
+  heart: () => (G.heart ??= shared(heartGeometry())),
+  star: () => (G.star ??= shared(starGeometry())),
 };
 
 function heartGeometry() {
@@ -118,6 +120,7 @@ export class ToonKit {
     const key = color + (opts ? JSON.stringify(opts) : '');
     if (!this.mats.has(key)) {
       const m = toonMaterial(color, opts);
+      if (this.shared) m.userData.shared = true;
       this.mats.set(key, m);
       this.list.push(m);
     }

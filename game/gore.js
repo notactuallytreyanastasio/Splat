@@ -6,6 +6,7 @@ import { DecalLayer } from '../engine/fx/decals.js';
 import { Debris } from '../engine/fx/debris.js';
 import { geo, toonMaterial } from '../engine/render/toon.js';
 import { bakeStatic } from '../engine/render/bake.js';
+import { disposeTree } from '../engine/render/dispose.js';
 import { fx } from '../engine/core/rng.js';
 import { goreChunk, wallBlob, GORE_KINDS, RAINBOW } from './models.js';
 
@@ -26,7 +27,7 @@ export class Gore {
     this.confetti = new Particles(scene, { max: 900, geometry: geo.sharpBox(), material: toonMaterial(0xffffff), stretch: 0 });
     this.confetti.solidAt = solidAt;
     this.decals = new DecalLayer(scene, map.w, map.h, { ppu: 22 });
-    this.debris = new Debris(scene, { max: 170, solidAt });
+    this.debris = new Debris(scene, { max: 170, solidAt, dispose: disposeTree });
     // Settled limbs and corpses are baked into static batches: the floor keeps every
     // body for the whole run at a couple of draw calls per dozen.
     this.settled = []; this.batches = [];
@@ -126,10 +127,16 @@ export class Gore {
     for (const it of this.debris.items) {
       if (!it.proj || it.sink) continue;
       const sp = Math.hypot(it.v.x, it.v.z), p = it.obj.position;
+      const lx = it.lx ?? p.x, lz = it.lz ?? p.z;
+      it.lx = p.x; it.lz = p.z;
       // Bowling Ball: heavier pieces keep rolling as threats at lower speed and hit wider.
-      const bw = it.proj.bw;
+      const bw = it.proj.bw, r = 0.35 + 0.2 * Math.min(2, bw);
       if (sp < (bw ? 3.5 : 5) || p.y > 1.6) { if (sp < 3) it.proj = null; continue; }
-      for (const e of g.world.query(p.x, p.z, 0.35 + 0.2 * Math.min(2, bw), e => e.team === 'enemy' && e.hittable && !e.carried && e.def && !it.proj.hit.has(e))) {
+      // Swept along the path since last frame: at low frame rates a corpse moves more than
+      // a bug's width per frame and the 3rd and 4th pins were being skipped.
+      const sx = p.x - lx, sz = p.z - lz, len2 = sx * sx + sz * sz || 1e-6;
+      const segDist = e => { const t = Math.max(0, Math.min(1, ((e.x - lx) * sx + (e.z - lz) * sz) / len2)); return Math.hypot(e.x - (lx + sx * t), e.z - (lz + sz * t)); };
+      for (const e of g.world.query((p.x + lx) / 2, (p.z + lz) / 2, Math.sqrt(len2) / 2 + r, e => e.team === 'enemy' && e.hittable && !e.carried && e.def && !it.proj.hit.has(e) && segDist(e) < r + e.radius)) {
         it.proj.hit.add(e);
         g.corpseImpact(it, e, sp);
         if (!it.proj) break;
@@ -162,10 +169,10 @@ export class Gore {
   bakeSettled() {
     const objs = this.settled.splice(0);
     const batch = bakeStatic(objs, { shadow: false });
-    for (const o of objs) o.parent?.remove(o);
+    for (const o of objs) { o.parent?.remove(o); disposeTree(o); }
     this.game.scene.add(batch);
     this.batches.push(batch);
-    if (this.batches.length > (matchMedia('(pointer: coarse)').matches ? 18 : 36)) { const old = this.batches.shift(); this.game.scene.remove(old); old.traverse(m => m.geometry?.dispose()); }
+    if (this.batches.length > (matchMedia('(pointer: coarse)').matches ? 18 : 36)) { const old = this.batches.shift(); this.game.scene.remove(old); disposeTree(old); }
   }
   update(dt) {
     this.blood.update(dt);

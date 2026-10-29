@@ -38,4 +38,4 @@ function send(res, code, body, ext = '.txt') {
   res.end(body);
 }
 
-server.listen(port, () => console.log(`http://localhost:${port}/  (editor: /editor.html)`));
+server.listen(port, () => console.log(`http://localhost:${server.address().port}/  (editor: /editor.html)`));
