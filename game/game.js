@@ -102,9 +102,7 @@ export class Game {
   }
   begin() {
     document.body.classList.add('playing');
-    // iOS keeps any accidental zoom; re-asserting the viewport snaps it back to 1.
-    const vp = document.querySelector('meta[name=viewport]');
-    if (vp) { const c = vp.content; vp.content = c + ', maximum-scale=1'; setTimeout(() => { vp.content = c; }, 50); } if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
+    if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
   get players() { return [this.player, ...(this.coop?.remotes.values() ?? [])].filter(p => !p.dead); }
   nearestPlayer(x, z) {
     let best = null, bd = Infinity;
@@ -909,6 +907,9 @@ export class Game {
     }
   }
   render(dt) {
+    const now = performance.now();
+    if (this.lastRender) this.view.adapt(now - this.lastRender);
+    this.lastRender = now;
     const frozen = this.loop.hitstop > 0;
     const sdt = frozen ? 0 : dt * this.loop.timeScale;
     for (const e of this.world.entities) e.sync?.(sdt);
@@ -931,6 +932,7 @@ export class Game {
       this.touch.setLabel('parry', 'PARRY', this.threat < 0.45);
     }
     this.view.render();
+    if (this.opts.perf) this.hud.perf(this.view);
   }
 }
 const r2 = v => Math.round(v * 100) / 100;

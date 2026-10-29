@@ -5,6 +5,7 @@ import { Particles, LAND_BOUNCE, LAND_SPLAT } from '../engine/fx/particles.js';
 import { DecalLayer } from '../engine/fx/decals.js';
 import { Debris } from '../engine/fx/debris.js';
 import { geo, toonMaterial } from '../engine/render/toon.js';
+import { bakeStatic } from '../engine/render/bake.js';
 import { fx } from '../engine/core/rng.js';
 import { goreChunk, wallBlob, GORE_KINDS, RAINBOW } from './models.js';
 
@@ -15,7 +16,7 @@ export class Gore {
     this.game = game;
     const { scene, map } = game;
     const solidAt = (x, z) => map.solidAt(x, z);
-    this.blood = new Particles(scene, { max: 3000, geometry: geo.lowSphere(), material: toonMaterial(0xffffff), stretch: 0.07 });
+    this.blood = new Particles(scene, { max: matchMedia('(pointer: coarse)').matches ? 1500 : 3000, geometry: geo.lowSphere(), material: toonMaterial(0xffffff), stretch: 0.07 });
     this.blood.solidAt = solidAt;
     this.blood.onLand = (x, z, vx, vz, size, i) => {
       const a = this.blood.mesh.instanceColor.array;
@@ -26,6 +27,17 @@ export class Gore {
     this.confetti.solidAt = solidAt;
     this.decals = new DecalLayer(scene, map.w, map.h, { ppu: 22 });
     this.debris = new Debris(scene, { max: 170, solidAt });
+    // Settled limbs and corpses are baked into static batches: the floor keeps every
+    // body for the whole run at a couple of draw calls per dozen.
+    this.settled = []; this.batches = [];
+    this.debris.onSettle = it => { if (it.proj) return false; this.settled.push(it.obj); return true; };
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    this.wallMesh = new THREE.InstancedMesh(geo.lowSphere(), toonMaterial(0xffffff), coarse ? 250 : 500);
+    this.wallMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.wallMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.wallMesh.count * 3), 3);
+    this.wallMesh.count = 0; this.wallMesh.frustumCulled = false;
+    scene.add(this.wallMesh);
+    this.wallNext = 0; this.wallMax = coarse ? 250 : 500;
     this.fountains = [];
     this.wallBlobs = [];
     this.stats = { droplets: 0, gibs: 0 };
@@ -117,29 +129,35 @@ export class Gore {
     }
   }
   fountain(obj, dur, colors) { this.fountains.push({ obj, t: dur, colors }); }
-  // Stick blood blobs onto the wall face that was hit.
+  // Stick blood blobs onto the wall face that was hit (one instanced mesh, ring buffer).
   wallSplat(x, z, nx, nz, r, amount, colors) {
     const sx = x - nx * r, sz = z - nz * r, tx = -nz, tz = nx;
-    const n = Math.min(14, 4 + amount * 0.2);
+    const n = Math.min(14, 4 + amount * 0.2), w = this.wallMesh, o = this._o ??= new THREE.Object3D();
+    const put = (px, py, pz, sxs, sys, color) => {
+      o.position.set(px, py, pz);
+      o.lookAt(px + nx, py, pz + nz);
+      o.scale.set(sxs, sys, 0.05);
+      o.updateMatrix();
+      const i = this.wallNext; this.wallNext = (i + 1) % this.wallMax;
+      w.setMatrixAt(i, o.matrix); w.setColorAt(i, _c.set(color));
+      w.count = Math.max(w.count, i + 1);
+    };
     for (let i = 0; i < n; i++) {
-      const b = wallBlob(fx.pick(colors));
-      const off = fx.f(-0.7, 0.7), hgt = fx.f(0.1, 1.5), s = fx.f(0.1, 0.32);
-      b.position.set(sx + tx * off + nx * 0.02, hgt, sz + tz * off + nz * 0.02);
-      b.lookAt(_v.set(b.position.x + nx, hgt, b.position.z + nz));
-      b.scale.set(s, s * fx.f(0.8, 1.8), 0.05);
-      this.game.scene.add(b);
-      this.wallBlobs.push(b);
-      // Drips run down the wall.
-      if (Math.random() < 0.5) {
-        const d = wallBlob(b.material.color.getHex());
-        d.position.copy(b.position); d.position.y -= s * 1.2; d.rotation.copy(b.rotation);
-        d.scale.set(s * 0.25, s * fx.f(1.5, 3), 0.04);
-        this.game.scene.add(d); this.wallBlobs.push(d);
-      }
+      const off = fx.f(-0.7, 0.7), hgt = fx.f(0.1, 1.5), s = fx.f(0.1, 0.32), c = fx.pick(colors);
+      put(sx + tx * off + nx * 0.02, hgt, sz + tz * off + nz * 0.02, s, s * fx.f(0.8, 1.8), c);
+      if (Math.random() < 0.5) put(sx + tx * off + nx * 0.02, hgt - s * 1.2, sz + tz * off + nz * 0.02, s * 0.25, s * fx.f(1.5, 3), c); // drip
     }
-    while (this.wallBlobs.length > 400) this.game.scene.remove(this.wallBlobs.shift());
+    w.instanceMatrix.needsUpdate = true; w.instanceColor.needsUpdate = true;
     this.spray(sx, 0.8, sz, nx, nz, 30 + amount, 5, colors);
     this.decals.splat(sx + nx * 0.4, sz + nz * 0.4, 0.6, '#c4002a');
+  }
+  bakeSettled() {
+    const objs = this.settled.splice(0);
+    const batch = bakeStatic(objs, { shadow: false });
+    for (const o of objs) o.parent?.remove(o);
+    this.game.scene.add(batch);
+    this.batches.push(batch);
+    if (this.batches.length > (matchMedia('(pointer: coarse)').matches ? 18 : 36)) { const old = this.batches.shift(); this.game.scene.remove(old); old.traverse(m => m.geometry?.dispose()); }
   }
   update(dt) {
     this.blood.update(dt);
@@ -147,6 +165,7 @@ export class Gore {
     this.debris.update(dt);
     this.decals.update(dt);
     this.projectiles();
+    if (this.settled.length >= 10 || (this.settled.length && (this.bakeT = (this.bakeT ?? 0) + dt) > 3)) { this.bakeT = 0; this.bakeSettled(); }
     for (let i = this.fountains.length - 1; i >= 0; i--) {
       const f = this.fountains[i];
       f.t -= dt;

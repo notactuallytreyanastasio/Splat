@@ -65,14 +65,14 @@ export function withOutline(mesh, thick = 0.035) {
 // Shared unit geometries. Parts are scaled instances of these.
 const G = {};
 export const geo = {
-  sphere: () => (G.sphere ??= new THREE.SphereGeometry(0.5, 20, 14)),
+  sphere: () => (G.sphere ??= new THREE.SphereGeometry(0.5, 11, 8)),
   lowSphere: () => (G.lowSphere ??= new THREE.IcosahedronGeometry(0.5, 1)),
-  capsule: () => (G.capsule ??= new THREE.CapsuleGeometry(0.5, 1, 6, 14)),
-  cylinder: () => (G.cylinder ??= new THREE.CylinderGeometry(0.5, 0.5, 1, 16)),
-  cone: () => (G.cone ??= new THREE.ConeGeometry(0.5, 1, 16)),
-  box: () => (G.box ??= new RoundedBoxGeometry(1, 1, 1, 3, 0.12)),
+  capsule: () => (G.capsule ??= new THREE.CapsuleGeometry(0.5, 1, 4, 10)),
+  cylinder: () => (G.cylinder ??= new THREE.CylinderGeometry(0.5, 0.5, 1, 12)),
+  cone: () => (G.cone ??= new THREE.ConeGeometry(0.5, 1, 12)),
+  box: () => (G.box ??= new RoundedBoxGeometry(1, 1, 1, 2, 0.12)),
   sharpBox: () => (G.sharpBox ??= new THREE.BoxGeometry(1, 1, 1)),
-  torus: () => (G.torus ??= new THREE.TorusGeometry(0.5, 0.18, 10, 24)),
+  torus: () => (G.torus ??= new THREE.TorusGeometry(0.5, 0.18, 8, 16)),
   heart: () => (G.heart ??= heartGeometry()),
   star: () => (G.star ??= starGeometry()),
 };
@@ -118,8 +118,11 @@ export class ToonKit {
     if (o.s) Array.isArray(o.s) ? mesh.scale.set(...o.s) : mesh.scale.setScalar(o.s);
     if (o.p) mesh.position.set(...o.p);
     if (o.r) mesh.rotation.set(...o.r);
-    mesh.castShadow = o.shadow !== false;
-    if (o.outline !== false) withOutline(mesh, o.outline ?? 0.035);
+    // Tiny parts (eyes, sprinkles, spots) cost a draw call each for ink and shadow that
+    // nobody can see at this camera distance.
+    const size = Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
+    mesh.castShadow = o.shadow !== false && size > 0.16;
+    if (o.outline !== false && size > 0.07) withOutline(mesh, o.outline ?? 0.035);
     if (o.name) mesh.name = o.name;
     if (o.parent) o.parent.add(mesh);
     return mesh;
@@ -134,7 +137,8 @@ export function makeLights(scene, { sky = 0xfff4fb, ground = 0xd9c8ff } = {}) {
   scene.add(new THREE.HemisphereLight(sky, ground, 1.6));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
   const c = sun.shadow.camera;
   c.left = c.bottom = -16; c.right = c.top = 16; c.near = 1; c.far = 80;
   sun.shadow.bias = -0.0008;

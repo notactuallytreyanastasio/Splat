@@ -4,12 +4,18 @@ import * as THREE from 'three';
 
 export class IsoView {
   constructor(container, { fov = 30, distance = 23, pitch = 54, yaw = 45, background = 0xffe9f6 } = {}) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    // Phones and tablets have tiny pixels and small GPUs: cap the work.
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.5 : 2));
+    this.coarse = matchMedia('(pointer: coarse)').matches;
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.coarse, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+    // Phones and tablets have tiny pixels and small GPUs: cap the work, then adapt.
+    this.maxRatio = Math.min(devicePixelRatio, this.coarse ? 1.5 : 2);
+    this.ratio = this.maxRatio;
+    this.renderer.setPixelRatio(this.ratio);
+    this.container = container;
+    this.frameMs = 16; this.slowT = 0; this.fastT = 0;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
+    Object.assign(this.renderer.domElement.style, { width: '100%', height: '100%', display: 'block' });
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(background);
     this.camera = new THREE.PerspectiveCamera(fov, 1, 0.5, 200);
@@ -22,7 +28,10 @@ export class IsoView {
     this.raycaster = new THREE.Raycaster();
     this.ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.resize();
-    addEventListener('resize', () => this.resize());
+    // Size from the element, not window events: mobile Safari changes the viewport
+    // (zoom, toolbars, rotation) without a resize the canvas can trust.
+    new ResizeObserver(() => this.resize()).observe(container);
+    addEventListener('orientationchange', () => setTimeout(() => this.resize(), 200));
   }
   setAngles(pitchDeg, yawDeg) {
     const p = THREE.MathUtils.degToRad(pitchDeg), y = THREE.MathUtils.degToRad(yawDeg);
@@ -34,8 +43,8 @@ export class IsoView {
     this.up = new THREE.Vector3(-Math.sin(y), 0, -Math.cos(y));
   }
   resize() {
-    const w = innerWidth, h = innerHeight;
-    this.renderer.setSize(w, h);
+    const w = this.container?.clientWidth || innerWidth, h = this.container?.clientHeight || innerHeight;
+    this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     // A fixed vertical FOV leaves a portrait screen seeing a sliver; pull back to keep the sides.
@@ -75,6 +84,14 @@ export class IsoView {
   // Turn a screen-space stick (x right, y up) into a ground direction.
   screenToWorldDir(sx, sy) {
     return { x: this.right.x * sx + this.up.x * sy, z: this.right.z * sx + this.up.z * sy };
+  }
+  // Adaptive resolution: drop render scale when frames run long, creep back when there
+  // is headroom. Fill rate is what a phone runs out of first.
+  adapt(dtMs) {
+    this.frameMs += (dtMs - this.frameMs) * 0.05;
+    if (this.frameMs > 21) { this.slowT += dtMs; this.fastT = 0; } else if (this.frameMs < 15) { this.fastT += dtMs; this.slowT = 0; }
+    if (this.slowT > 1500 && this.ratio > 0.6) { this.ratio = Math.max(0.6, this.ratio * 0.85); this.renderer.setPixelRatio(this.ratio); this.resize(); this.slowT = 0; }
+    if (this.fastT > 6000 && this.ratio < this.maxRatio) { this.ratio = Math.min(this.maxRatio, this.ratio * 1.1); this.renderer.setPixelRatio(this.ratio); this.resize(); this.fastT = 0; }
   }
   render() { this.renderer.render(this.scene, this.camera); }
 }

@@ -60,6 +60,10 @@ export class Hud {
       cue.classList.toggle('now', t < 0.2);
     }
   }
+  perf(view) {
+    const i = view.renderer.info.render;
+    (this.perfEl ??= Object.assign(document.body.appendChild(document.createElement('div')), { className: 'perf' })).textContent = `${(1000 / view.frameMs).toFixed(0)} fps · ${i.calls} calls · ${(i.triangles / 1000).toFixed(0)}k tris · x${view.ratio.toFixed(2)}`;
+  }
   roster() { this.rosterDirty = true; }
   updateCoop() {
     const g = this.g, list = [g.player, ...g.coop.remotes.values()];
@@ -102,7 +106,6 @@ export class Hud {
       t.querySelector('button').textContent = net.isHost ? 'start the massacre' : 'jump in';
     } else {
       // Co-op stays hidden until its server channel is live (?beta shows it).
-      if (!new URLSearchParams(location.search).has('beta')) t.querySelector('.modes').style.display = 'none';
       t.querySelector('.coop').onclick = () => { const code = Math.random().toString(36).slice(2, 6).toUpperCase(); location.search = '?coop=' + code; };
       t.querySelector('.join').onsubmit = e => { e.preventDefault(); const c = e.target.code.value.trim().toUpperCase(); if (c) location.search = '?coop=' + encodeURIComponent(c); };
     }

@@ -8,6 +8,7 @@ export class Debris {
   constructor(scene, { max = 140, floorY = 0, solidAt = null } = {}) {
     Object.assign(this, { scene, max, floorY, solidAt });
     this.items = [];
+    this.onSettle = null; // (item) => true to take it out of the simulation
   }
   // Moves obj from wherever it lives into the scene, keeping its world transform.
   add(obj, { vx = 0, vy = 0, vz = 0, spin = [0, 0, 0], radius = 0.15, bleed = 0, bounce = 0.35, onBounce = null, onBleed = null, life = Infinity } = {}) {
@@ -33,7 +34,11 @@ export class Debris {
         if (it.sink > 0.8) { this.scene.remove(o); this.items.splice(i, 1); }
         continue;
       }
-      if (it.rest > 0.4) { it.rest += dt; continue; }
+      if (it.rest > 0.4) {
+        it.rest += dt;
+        if (it.rest > 1.2 && !it.proj && this.onSettle?.(it)) this.items.splice(i, 1);
+        continue;
+      }
       it.v.y -= 24 * dt;
       const nx = p.x + it.v.x * dt, nz = p.z + it.v.z * dt;
       if (this.solidAt && this.solidAt(nx, nz) && p.y < 1.5) { it.v.x *= -0.4; it.v.z *= -0.4; it.onBounce?.(it, p.x, p.y, p.z, 'wall'); }

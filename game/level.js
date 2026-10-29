@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { TileMap } from '../engine/world/tilemap.js';
 import { buildTileMesh, vcol } from '../engine/render/tilemesh.js';
 import { ToonKit } from '../engine/render/toon.js';
+import { bakeStatic } from '../engine/render/bake.js';
 import { RAINBOW } from './models.js';
 
 export const LEGEND = {
@@ -99,6 +100,10 @@ export function buildLevelMeshes(scene, L, rng) {
       if (s.height > 1 && rng.chance(0.18)) { const f = flower(kit, x + 0.5, z + 0.5, rng, 0.45); f.position.y = s.height; props.add(f); }
     } else if (ch === '.' && rng.chance(0.025)) props.add(tuft(kit, x + rng.next(), z + rng.next(), rng));
   }
+  // Flowers and tufts never move: bake them into two draw calls. Mushrooms stay
+  // separate because they fade when they hide the player.
+  const decor = props.children.filter(c => !occluders.includes(c));
+  if (decor.length) { scene.add(bakeStatic(decor)); for (const c of decor) props.remove(c); }
   for (const d of L.doors) { d.mesh = gate(kit, d); d.mesh.position.y = -2; scene.add(d.mesh); }
   return { mesh, props, occluders };
 }
@@ -118,9 +123,11 @@ function mushroom(kit, x, z, rng) {
 function flower(kit, x, z, rng, s = 1) {
   const g = new THREE.Group(), petal = RAINBOW[rng.int(0, 5)];
   kit.part('cylinder', 0x7bc47f, { s: [0.05, 0.8, 0.05], p: [0, 0.4, 0], parent: g, outline: 0.015 });
-  kit.part('sphere', 0x7bc47f, { s: [0.25, 0.04, 0.12], p: [0.12, 0.3, 0], r: [0, 0, 0.4], parent: g, outline: 0.012 });
-  for (let i = 0; i < 6; i++) kit.part('sphere', petal, { s: [0.22, 0.06, 0.22], p: [Math.cos(i * 1.047) * 0.14, 0.82, Math.sin(i * 1.047) * 0.14], parent: g, outline: 0.012 });
-  kit.part('sphere', 0xffd66b, { s: 0.14, p: [0, 0.84, 0], parent: g, outline: 0.012 });
+  kit.part('lowSphere', 0x7bc47f, { s: [0.25, 0.04, 0.12], p: [0.12, 0.3, 0], r: [0, 0, 0.4], parent: g, outline: false, shadow: false });
+  // Low-poly, ink only on the small ones you see up close: there are a hundred of these.
+  const ink = s >= 0.7 ? 0.012 : false;
+  for (let i = 0; i < 6; i++) kit.part('lowSphere', petal, { s: [0.22, 0.06, 0.22], p: [Math.cos(i * 1.047) * 0.14, 0.82, Math.sin(i * 1.047) * 0.14], parent: g, outline: ink, shadow: false });
+  kit.part('lowSphere', 0xffd66b, { s: 0.14, p: [0, 0.84, 0], parent: g, outline: ink, shadow: false });
   g.scale.setScalar(s);
   g.position.set(x, 0, z);
   g.rotation.y = rng.next() * 6;
