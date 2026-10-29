@@ -45,7 +45,7 @@ export class Hud {
     this.$('.xp .fill').style.width = (g.xp / g.xpNeed()) * 100 + '%';
     this.$('.xp .lvl').textContent = 'LV ' + g.level_;
     // innerHTML only on change: these run every frame and the hearts are SVG.
-    if (this.shownPotions !== p.potions) { this.shownPotions = p.potions; this.$('.potions').innerHTML = icon('heart').repeat(p.potions); }
+    if (this.shownPotions !== p.potions) { this.shownPotions = p.potions; this.$('.potions').innerHTML = p.potions ? icon('heart').repeat(p.potions) : `<span class="none">${icon('heart')}</span>`; }
     if (this.shownGems !== g.gems) { this.shownGems = g.gems; this.$('.gems span').textContent = g.gems; }
     const boss = g.boss;
     this.$('.boss').classList.toggle('on', !!boss && !boss.dead);
