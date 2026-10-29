@@ -214,7 +214,12 @@ export class Hud {
     f.style.background = color;
     f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
   }
-  parried() { const c = this.$('.cue'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
+  // The burst plays once, then the cue goes back to hidden: left on, its "!" badge stayed
+  // on screen for the rest of the run wherever the last parry happened.
+  parried() {
+    const c = this.$('.cue'); c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit');
+    clearTimeout(this.cueT); this.cueT = setTimeout(() => c.classList.remove('hit'), 400);
+  }
   hurt() { const v = this.$('.vignette'); v.style.opacity = 0.8; this.lagHold = 0.45; this.restart('.orb.hp', 'hit'); }
   showBoons(offers, live = false) {
     const el = this.$('.boons');
