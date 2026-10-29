@@ -125,9 +125,14 @@ export function updateMushrooms(L, dt) {
   for (const m of L.wobbling) {
     const u = m.userData;
     u.sq ??= 1; u.lx ??= 0; u.lz ??= 0;
-    u.sqV += (-(u.sq - 1) * 420 - u.sqV * 9) * dt; u.sq = Math.max(0.55, Math.min(1.45, u.sq + u.sqV * dt));
-    u.lvx += (-u.lx * 260 - u.lvx * 8) * dt; u.lx += u.lvx * dt;
-    u.lvz += (-u.lz * 260 - u.lvz * 8) * dt; u.lz += u.lvz * dt;
+    // render dt reaches 0.1 s on a slow frame and 0.3 s at bot speed 3; Euler on a spring
+    // this stiff diverges past ~0.1 s, so integrate in fixed slices no longer than 1/60.
+    const n = Math.ceil(dt * 60), h = dt / Math.max(1, n);
+    for (let i = 0; i < n; i++) {
+      u.sqV += (-(u.sq - 1) * 420 - u.sqV * 9) * h; u.sq = Math.max(0.55, Math.min(1.45, u.sq + u.sqV * h));
+      u.lvx += (-u.lx * 260 - u.lvx * 8) * h; u.lx += u.lvx * h;
+      u.lvz += (-u.lz * 260 - u.lvz * 8) * h; u.lz += u.lvz * h;
+    }
     u.flash = Math.max(0, u.flash - dt * 5);
     // The cap takes the squash; the stalk only gives a little.
     u.head.scale.set(1 / Math.sqrt(u.sq), u.sq, 1 / Math.sqrt(u.sq));
