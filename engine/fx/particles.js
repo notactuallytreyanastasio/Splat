@@ -19,6 +19,7 @@ export class Particles {
     this.drag = new Float32Array(max);
     this.land = new Uint8Array(max);
     this.spin = new Float32Array(max);
+    this.grow = new Float32Array(max); // size gained over a lifetime (dust puffs swell as they fade)
     this.mesh = new THREE.InstancedMesh(geometry, material, max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3), 3);
@@ -30,14 +31,14 @@ export class Particles {
     this.onLand = null; // (x, z, vx, vz, size, colorIndex) => void
     this.solidAt = null;
   }
-  spawn(x, y, z, vx, vy, vz, { life = 1.5, size = 0.1, color = 0xff2244, gravity = 22, drag = 0.4, land = LAND_SPLAT } = {}) {
+  spawn(x, y, z, vx, vy, vz, { life = 1.5, size = 0.1, color = 0xff2244, gravity = 22, drag = 0.4, land = LAND_SPLAT, grow = 0 } = {}) {
     let i = this.n;
     if (i >= this.max) i = (Math.random() * this.max) | 0; // full: recycle a random slot
     else this.n++;
     this.p.set([x, y, z], i * 3);
     this.v.set([vx, vy, vz], i * 3);
     this.life[i] = this.maxLife[i] = life;
-    this.size[i] = size; this.grav[i] = gravity; this.drag[i] = drag; this.land[i] = land;
+    this.size[i] = size; this.grav[i] = gravity; this.drag[i] = drag; this.land[i] = land; this.grow[i] = grow;
     this.spin[i] = Math.random() * 6.28;
     this.mesh.setColorAt(i, this.color.set(color));
     return i;
@@ -46,7 +47,7 @@ export class Particles {
     const last = --this.n;
     if (i !== last) {
       for (const a of [this.p, this.v]) a.copyWithin(i * 3, last * 3, last * 3 + 3);
-      for (const a of [this.life, this.maxLife, this.size, this.grav, this.drag, this.land, this.spin]) a[i] = a[last];
+      for (const a of [this.life, this.maxLife, this.size, this.grav, this.drag, this.land, this.spin, this.grow]) a[i] = a[last];
       this.mesh.instanceColor.array.copyWithin(i * 3, last * 3, last * 3 + 3);
     }
   }
@@ -82,7 +83,7 @@ export class Particles {
     for (let i = 0; i < this.n; i++) {
       const k = i * 3;
       _v.set(v[k], v[k + 1], v[k + 2]);
-      const sp = _v.length(), s = this.size[i] * Math.min(1, this.life[i] / 0.25 + 0.2);
+      const sp = _v.length(), s = this.size[i] * Math.min(1, this.life[i] / 0.25 + 0.2) * (1 + this.grow[i] * (1 - this.life[i] / this.maxLife[i]));
       if (this.stretch > 0 && sp > 0.5) {
         _q.setFromUnitVectors(_up, _v.multiplyScalar(1 / sp));
         _s.set(s, s * (1 + sp * this.stretch), s);

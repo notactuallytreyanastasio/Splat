@@ -21,6 +21,7 @@ import { TouchControls } from '../engine/ui/touch.js';
 import { parseLevel, buildLevelMeshes } from './level.js';
 import { Player, Enemy, Mantis, Pollen, Gem, Potion, Breakable, ENEMIES } from './actors.js';
 import { Gore } from './gore.js';
+import { Juice } from './juice.js';
 import { Hud } from './hud.js';
 import { defineSounds } from './sounds.js';
 import { rollBoons } from './boons.js';
@@ -64,6 +65,7 @@ export class Game {
     this.levelMeshes = buildLevelMeshes(this.scene, this.level, new RNG(this.seed ^ 0x5eed));
     this.flow = new FlowField(this.map);
     this.gore = new Gore(this);
+    this.juice = new Juice(this);
     this.floaters = new Floaters(this.view, document.getElementById('floaters'));
     this.telegraphs = [];
     this.slashes = [];

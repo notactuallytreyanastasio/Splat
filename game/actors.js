@@ -364,6 +364,8 @@ export class Player extends Creature {
     return true;
   }
   physics(dt) { super.physics(dt); }
+  sync(dt) { super.sync(dt); this.game.juice?.player(this, dt); }
+  onRemove() { super.onRemove(); this.game.juice?.forget(this); }
 }
 
 // ------------------------------------------------------------------ enemies
