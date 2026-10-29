@@ -12,7 +12,13 @@ export const BOONS = [
   { id: 'long', name: 'Long Petal Blade', desc: '+25% reach', icon: 'long', apply: p => (p.stats.reach *= 1.25) },
   { id: 'yeet', name: 'Olympic Yeet', desc: 'Throws fly 40% harder', icon: 'yeet', apply: p => (p.stats.throwPower *= 1.4) },
   { id: 'nectar', name: 'Nectar Stash', desc: '+2 potions, potions heal +15', icon: 'nectar', apply: p => { p.potions += 2; p.stats.potionHeal += 15; } },
+  // The projectile boons: each one changes what a flying body does, not just how much it hurts.
+  { id: 'ricochet', name: 'Ricochet', desc: 'Launched bugs bank off walls at full speed and splat twice', icon: 'ricochet', apply: p => (p.stats.ricochet += 1) },
+  { id: 'sticky', name: 'Sticky Bomb', desc: 'Thrown bugs blow up on their first hit', icon: 'sticky', apply: p => (p.stats.sticky += p.stats.sticky ? 12 : 26) },
+  { id: 'longarms', name: 'Long Arms', desc: '+60% grab range, grab beetles any time', icon: 'longarms', apply: p => { p.stats.grabRange *= 1.6; p.stats.grabAny = 1; } },
+  { id: 'bowling', name: 'Bowling Ball', desc: 'Corpses and gibs roll heavy and plough through', icon: 'bowling', apply: p => (p.stats.bowling += 1) },
 ];
+export const boonById = id => BOONS.find(b => b.id === id);
 
 export function rollBoons(rng, n) {
   return rng.shuffle(BOONS.slice()).slice(0, n);

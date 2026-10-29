@@ -82,7 +82,7 @@ export class Creature extends Entity {
       const d = Math.exp(-fr * dt);
       this.vx *= d; this.vz *= d;
     }
-    if (!this.launched) { this.impacted.clear(); if (!this.airborne && this.stun <= 0) { this.thrownBy = null; this.chain = 0; } }
+    if (!this.launched) { this.impacted.clear(); if (!this.airborne && this.stun <= 0) { this.thrownBy = null; this.chain = 0; this.ricochets = 0; } }
     this.world.move(this, dt);
     if (this.airborne) {
       this.vy -= 30 * dt;
@@ -132,6 +132,8 @@ export class Creature extends Entity {
     const noir = this.team === 'enemy' && !this.dead ? this.game.view.grade.noir : 0;
     if (noir !== this.noirTint) { r.kit.tint(noir * 0.9, 0xff0a0a); this.noirTint = noir; }
     r.kit.flash(this.flash * 0.9, this.flashColor);
+    // A sticky bomb blinks hot pink, faster as it flies, so you can see what is about to go off.
+    if (this.armed && !this.dead) r.kit.flash(Math.max(this.flash * 0.9, 0.45 + 0.4 * Math.sin(this.t * (this.carried ? 14 : 34))), 0xff3d8b);
     r.pose(r, { t: this.t, phase: this.phase, walk: clamp(sp / (this.def?.speed ?? 4), 0, 1), action: this.action, p: this.actionP, combo: this.combo ?? 0, seed: this.seed, air: this.airborne || this.launched || !!this.carried });
   }
   addWound() {
@@ -150,6 +152,7 @@ export class Creature extends Entity {
 export const BASE_STATS = {
   maxHp: 100, damage: 1, speed: 5.4, atkSpeed: 1, crit: 0.05, critMul: 2.2, lifesteal: 0, knock: 1, reach: 1,
   rageGain: 1, wallDamage: 1, explodeOnKill: 0, throwPower: 1, potionHeal: 45,
+  ricochet: 0, sticky: 0, grabRange: 1, grabAny: 0, bowling: 0,
 };
 
 export class Player extends Creature {
@@ -336,11 +339,14 @@ export class Player extends Creature {
   tryGrab() {
     const g = this.game;
     if (this.guest) { if (this.grabReq <= 0) { this.grabReq = 0.4; g.coop.request('grab'); } return false; }
-    const e = g.world.nearest(this.x + this.aimX * 0.6, this.z + this.aimZ * 0.6, e => e.grabbable && e.grabbable(), 1.7);
+    // Long Arms reaches further and does not wait for a beetle to be dazed.
+    const st = this.stats, ok = e => e.grabbable && (e.grabbable() || (st.grabAny && e.def?.grab === 'stunned' && !e.dead && !e.carried));
+    const e = g.world.nearest(this.x + this.aimX * 0.6 * st.grabRange, this.z + this.aimZ * 0.6 * st.grabRange, ok, 1.7 * st.grabRange);
     if (!e) return false;
+    const dist = Math.hypot(e.x - this.x, e.z - this.z);
     this.holding = e; e.carried = this; e.thrownBy = 'player';
     e.stun = 99; this.state = 'carry';
-    g.onGrab(this, e);
+    g.onGrab(this, e, dist);
     return true;
   }
   throwHeld(power = 1) {
@@ -352,6 +358,8 @@ export class Player extends Creature {
     e.x = this.x + this.aimX * 0.7; e.z = this.z + this.aimZ * 0.7; e.y = 1.2;
     e.vx = this.aimX * sp; e.vz = this.aimZ * sp; e.vy = 2.5;
     e.thrownBy = 'player'; e.chain = 0; e.impacted.clear();
+    e.lastHitBy = this; e.ricochets = 0;
+    if (this.stats.sticky) { e.sticky = this.stats.sticky; e.stickyT = 0; }
     this.set('throw', 0.25);
     g.onThrow(this, e);
   }
@@ -419,6 +427,8 @@ export class Enemy extends Creature {
     this.physics(dt);
     this.springs(dt);
     if (this.launched && this.thrownBy === 'player' && Math.random() < dt * 40) this.game.gore.trail(this);
+    // A sticky bomb that never touched anything still goes off once it stops flying.
+    if (this.sticky && !this.carried && (this.stickyT += dt) > 0.25 && !this.launched) g.stickyBoom(this);
     if (this.elite) this.rig.kit.flash(Math.max(this.flash * 0.9, 0.18), this.flash > 0.1 ? 0xffffff : new THREE.Color().setHSL((this.t * 0.5 + this.eliteHue) % 1, 1, 0.6).getHex());
   }
   // Steering toward the player: direct when visible, flow field otherwise.

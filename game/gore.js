@@ -93,7 +93,8 @@ export class Gore {
       const isCorpse = piece === t.rig.tilt || piece === t.rig.gibs[t.rig.gibs.length - 1];
       const sp = isCorpse ? launch : Math.max(power, launch) * fx.f(0.6, 1.1);
       const it = this.fling(piece, t.x, t.z, dx / l * sp + fx.f(-1.5, 1.5), isCorpse ? fx.f(1.5, 3) : fx.f(4, 10), dz / l * sp + fx.f(-1.5, 1.5), colors, isCorpse ? 0.5 : 0.18 * (t.rig.height ?? 1));
-      if (proj) it.proj = { mass: isCorpse ? mass : 0.25, chain, hit: new Set([t]) };
+      if (proj) it.proj = { mass: isCorpse ? mass : 0.25, chain, hit: new Set([t]), bw: info.bowling ?? 0, pins: 0 };
+      if (info.bowling) it.friction = 0.95; // Bowling Ball: the pieces roll instead of skidding to a stop
       if (isCorpse) this.fountain(piece, 1.4, colors);
     }
     if (overkill) {
@@ -125,8 +126,10 @@ export class Gore {
     for (const it of this.debris.items) {
       if (!it.proj || it.sink) continue;
       const sp = Math.hypot(it.v.x, it.v.z), p = it.obj.position;
-      if (sp < 5 || p.y > 1.6) { if (sp < 3) it.proj = null; continue; }
-      for (const e of g.world.query(p.x, p.z, 0.35, e => e.team === 'enemy' && e.hittable && !e.carried && e.def && !it.proj.hit.has(e))) {
+      // Bowling Ball: heavier pieces keep rolling as threats at lower speed and hit wider.
+      const bw = it.proj.bw;
+      if (sp < (bw ? 3.5 : 5) || p.y > 1.6) { if (sp < 3) it.proj = null; continue; }
+      for (const e of g.world.query(p.x, p.z, 0.35 + 0.2 * Math.min(2, bw), e => e.team === 'enemy' && e.hittable && !e.carried && e.def && !it.proj.hit.has(e))) {
         it.proj.hit.add(e);
         g.corpseImpact(it, e, sp);
         if (!it.proj) break;
