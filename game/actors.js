@@ -47,6 +47,9 @@ export class Creature extends Entity {
     game.scene.add(rig.root);
   }
   get airborne() { return this.y > 0.02 || this.vy > 0; }
+  // Only a body somebody else knocked is a projectile. A ladybug's own 9 u/s lunge must
+  // not count, or the lunge flags it launched, the AI drops the attack, and it never bites.
+  get launched() { return this.thrownBy != null && this.speed > this.launchSpeed; }
   get controllable() { return this.stun <= 0 && !this.airborne && !this.launched && !this.carried; }
   takeDamage(info) {
     if (this.dead || this.inv > 0 || this.carried) return false;
