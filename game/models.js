@@ -43,19 +43,19 @@ function eye(kit, parent, x, y, z, s, { pupil = PAL.black, white = PAL.white, lo
 const walkSwing = s => Math.sin(s.phase) * 0.9 * s.walk;
 
 // ------------------------------------------------------------------ the Candy Knight
-export function knight() {
-  const r = base(), k = r.kit, b = r.body;
+export function knight(tint = {}) {
+  const r = base(), k = r.kit, b = r.body, helm = tint.helm ?? PAL.mint;
   const legL = joint(b, 0.15, 0.42, 0), legR = joint(b, -0.15, 0.42, 0);
   for (const l of [legL, legR]) {
     limb(k, l, PAL.lilac, 0.11, 0.36);
     k.part('sphere', PAL.hotpink, { s: [0.26, 0.2, 0.34], p: [0, -0.36, 0.05], parent: l });
   }
   const torso = joint(b, 0, 0.45, 0);
-  k.part('cylinder', PAL.mint, { s: [0.62, 0.16, 0.5], p: [0, 0.03, 0], parent: torso });
+  k.part('cylinder', helm, { s: [0.62, 0.16, 0.5], p: [0, 0.03, 0], parent: torso });
   k.part('box', PAL.lavender, { s: [0.56, 0.48, 0.42], p: [0, 0.3, 0], parent: torso });
   k.part('heart', PAL.hotpink, { s: 0.22, p: [0, 0.34, 0.22], parent: torso, outline: 0.02 });
   const head = joint(b, 0, 0.98, 0);
-  k.part('sphere', PAL.mint, { s: [0.6, 0.56, 0.6], p: [0, 0.12, 0], parent: head });
+  k.part('sphere', helm, { s: [0.6, 0.56, 0.6], p: [0, 0.12, 0], parent: head });
   k.part('box', PAL.black, { s: [0.44, 0.1, 0.12], p: [0, 0.12, 0.25], parent: head, outline: false });
   k.part('sphere', 0xfff6a8, { s: 0.07, p: [0.09, 0.12, 0.3], parent: head, outline: false, mat: { emissive: 0xfff6a8, emissiveIntensity: 1 } });
   k.part('sphere', 0xfff6a8, { s: 0.07, p: [-0.09, 0.12, 0.3], parent: head, outline: false, mat: { emissive: 0xfff6a8, emissiveIntensity: 1 } });
@@ -114,6 +114,10 @@ function poseKnight(r, s) {
     armR.rotation.set(-3.0, 0.2, 0); armL.rotation.set(-3.0, -0.2, 0);
   } else if (a === 'throw') {
     armR.rotation.set(-3 + p * 2.2, 0.2, 0); armL.rotation.set(-3 + p * 2.2, -0.2, 0);
+  } else if (a === 'guard') {
+    // Blade held flat across the body: the parry stance.
+    armR.rotation.set(-1.5, -0.9, 0); armL.rotation.set(-1.2, 0.6, 0);
+    r.body.rotation.y = 0.35;
   } else if (a === 'dodge') {
     r.body.rotation.x = p * Math.PI * 2;
     r.body.position.y = 0.3 + Math.sin(p * Math.PI) * 0.3;

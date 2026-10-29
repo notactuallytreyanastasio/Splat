@@ -27,14 +27,25 @@ export class World {
     this.map = map;
     this.entities = [];
     this.onImpact = null; // (mover, other, relativeSpeed) => void
+    // Stable ids so a network peer can name an entity. Proxies arrive with theirs.
+    this.byId = new Map();
+    this.nextId = 1;
   }
-  add(e) { e.world = this; this.entities.push(e); e.onAdd(); return e; }
+  add(e) {
+    e.world = this;
+    e.nid ??= this.nextId++;
+    this.byId.set(e.nid, e);
+    this.entities.push(e);
+    e.onAdd();
+    return e;
+  }
   update(dt) {
-    for (const e of this.entities) if (!e.dead) { e.age += dt; e.update(dt); }
+    // A proxy mirrors an entity simulated elsewhere: it is smoothed, not simulated.
+    for (const e of this.entities) if (!e.dead) { e.age += dt; e.proxy ? e.netStep?.(dt) : e.update(dt); }
     this.contacts();
     for (let i = this.entities.length - 1; i >= 0; i--) {
       const e = this.entities[i];
-      if (e.dead) { this.entities.splice(i, 1); e.onRemove(); }
+      if (e.dead) { this.entities.splice(i, 1); this.byId.delete(e.nid); e.onRemove(); }
     }
   }
   query(x, z, r, filter) {

@@ -5,7 +5,8 @@ import * as THREE from 'three';
 export class IsoView {
   constructor(container, { fov = 30, distance = 23, pitch = 54, yaw = 45, background = 0xffe9f6 } = {}) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // Phones and tablets have tiny pixels and small GPUs: cap the work.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.5 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -37,6 +38,8 @@ export class IsoView {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    // A fixed vertical FOV leaves a portrait screen seeing a sliver; pull back to keep the sides.
+    this.fit = w / h < 1.3 ? Math.pow(1.3 / (w / h), 0.75) : 1;
   }
   snap(x, z) { this.focus.set(x, 0, z); }
   follow(x, z, dt, rate = 6) {
@@ -53,7 +56,7 @@ export class IsoView {
     const s = this.trauma * this.trauma * 0.6, t = this.time * 40;
     const sx = s * (Math.sin(t * 1.3) + Math.sin(t * 2.7) * 0.5);
     const sy = s * (Math.sin(t * 1.7 + 1) + Math.sin(t * 3.1) * 0.5);
-    const off = this.offset.clone().multiplyScalar(1 - this.zoomKick);
+    const off = this.offset.clone().multiplyScalar((this.fit ?? 1) * (1 - this.zoomKick));
     this.camera.position.copy(this.focus).add(off).addScaledVector(this.right, sx);
     this.camera.position.y += sy;
     this.camera.lookAt(this.focus.x + this.right.x * sx, sy * 0.5, this.focus.z + this.right.z * sx);

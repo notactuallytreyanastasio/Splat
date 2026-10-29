@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Entity } from '../engine/world/world.js';
 import { fx } from '../engine/core/rng.js';
 import * as M from './models.js';
+import { emptyIntent } from '../engine/core/input.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -146,8 +147,9 @@ export const BASE_STATS = {
 };
 
 export class Player extends Creature {
-  constructor(game, x, z) {
-    super(game, x, z, M.knight());
+  constructor(game, x, z, tint = {}) {
+    super(game, x, z, M.knight(tint));
+    this.tint = tint;
     this.team = 'player';
     this.radius = 0.4; this.mass = 1.6;
     this.launchSpeed = Infinity;
@@ -161,19 +163,40 @@ export class Player extends Creature {
     this.dodgeCd = 0; this.heavyCd = 0;
     this.aimX = 0; this.aimZ = 1;
     this.holding = null;
+    this.parryT = 0; this.parryCd = 0;
     this.whirlTick = 0;
     this.accel = 22;
     // Ground ring + facing pip so you can find yourself in the gore.
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: 0xff5fa2, transparent: true, opacity: 0.9, depthWrite: false }));
+    this.addRing();
+  }
+  addRing() {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: this.tint.ring ?? 0xff5fa2, transparent: true, opacity: 0.9, depthWrite: false }));
     const pip = new THREE.Mesh(new THREE.CircleGeometry(0.16, 3), ring.material);
     ring.rotation.x = pip.rotation.x = -Math.PI / 2;
     pip.position.set(0, 0, 0.8); pip.rotation.z = Math.PI / 2;
     for (const m of [ring, pip]) { m.position.y = 0.035; m.renderOrder = 2; this.rig.root.add(m); }
   }
   get controllable() { return this.state !== 'dodge' && this.stun <= 0; }
+  get guest() { return this.game.guest && !this.remote; }
+  // Dismemberment takes the rig apart; a revived knight needs a new one.
+  rebuild() {
+    if (this.rig.root.parent) this.rig.root.parent.remove(this.rig.root);
+    this.rig = M.knight(this.tint);
+    this.game.scene.add(this.rig.root);
+    this.addRing();
+    this.wounds = 0; this.state = 'move'; this.holding = null;
+  }
   set(state, dur) { this.state = state; this.stateT = 0; this.stateDur = dur; this.hitSet.clear(); }
   update(dt) {
-    const g = this.game, it = g.intent, st = this.stats;
+    const g = this.game, it = this.intent ?? emptyIntent(), st = this.stats;
+    if (this.ghost) { this.vx = this.vz = 0; return; }
+    this.grabReq = (this.grabReq ?? 0) - dt;
+    // Parry: a short window, and a whiff costs a beat so mashing it is worse than timing it.
+    this.parryT -= dt; this.parryCd -= dt;
+    if (it.parry && this.parryCd <= 0 && this.state !== 'dodge') {
+      this.parryT = 0.22; this.parryCd = 0.45; this.parryHit = false;
+      if (this.guest) g.coop.request('parry');
+    }
     this.dodgeCd -= dt; this.heavyCd -= dt; this.comboTimer -= dt;
     if (this.comboTimer <= 0) this.combo = 0;
     const al = Math.hypot(it.aimX, it.aimZ);
@@ -212,7 +235,7 @@ export class Player extends Creature {
       } else if (want('grab') && this.tryGrab()) {
         take();
       } else if (want('heavy') && this.heavyCd <= 0) {
-        take(); this.set('heavy', 0.62 / st.atkSpeed); this.heavyCd = 0.9;
+        take(); this.set('heavy', 0.62 / st.atkSpeed); this.heavyCd = 0.9; this.swingCount = (this.swingCount ?? 0) + 1;
       } else if (it.attack) {
         this.startLight();
       }
@@ -257,13 +280,14 @@ export class Player extends Creature {
       h.facing = this.facing; h.tumble = Math.PI + Math.sin(this.t * 18) * 0.25;
       h.carryT = (h.carryT ?? 0) + dt;
     }
-    this.action = this.holding ? 'carry' : this.state === 'move' ? null : this.state;
+    this.action = this.holding ? 'carry' : this.parryT > 0 && this.state === 'move' ? 'guard' : this.state === 'move' ? null : this.state;
     this.actionP = clamp(p, 0, 1);
     this.springs(dt);
   }
   startLight() {
     const finisher = this.combo === 2;
     this.set(finisher ? 'finisher' : 'light', (finisher ? 0.48 : 0.3) / this.stats.atkSpeed);
+    this.swingKind = finisher ? 'finisher' : 'light';
     this.comboStep = this.combo;
     this.combo = (this.combo + 1) % 3;
     this.comboTimer = 0.9;
@@ -272,6 +296,8 @@ export class Player extends Creature {
   }
   swing(kind) {
     const g = this.game, st = this.stats;
+    // A guest's blows are resolved by the host, once per swing.
+    if (this.guest) { if (!this.hitSet.has('sent')) { this.hitSet.add('sent'); g.coop.request('swing', { k: kind }); } return; }
     const spec = {
       light: { range: 1.9, arc: 2.1, dmg: 12, knock: 5, lift: 1.5, stun: 0.35 },
       finisher: { range: 2.1, arc: 2.4, dmg: 22, knock: 12, lift: 6, stun: 0.8 },
@@ -292,6 +318,7 @@ export class Player extends Creature {
   whirlHit() {
     const g = this.game;
     g.sfx.play('swing', { pitch: 1.4, gap: 0.08 });
+    if (this.guest) { g.coop.request('whirl'); return; }
     for (const e of g.world.query(this.x, this.z, 2.2, e => e.hittable && e !== this)) {
       if (e.reflect) { e.reflect(e.x - this.x, e.z - this.z); continue; }
       const a = angleTo(this.x, this.z, e.x, e.z);
@@ -301,6 +328,7 @@ export class Player extends Creature {
   }
   tryGrab() {
     const g = this.game;
+    if (this.guest) { if (this.grabReq <= 0) { this.grabReq = 0.4; g.coop.request('grab'); } return false; }
     const e = g.world.nearest(this.x + this.aimX * 0.6, this.z + this.aimZ * 0.6, e => e.grabbable && e.grabbable(), 1.7);
     if (!e) return false;
     this.holding = e; e.carried = this; e.thrownBy = 'player';
@@ -311,6 +339,7 @@ export class Player extends Creature {
   throwHeld(power = 1) {
     const g = this.game, e = this.holding;
     this.holding = null;
+    if (this.guest) { e.carried = null; this.set('throw', 0.25); g.coop.request('throw', { pw: power }); g.onThrow(this, e); return; }
     e.carried = null; e.stun = 1.2; e.carryT = 0;
     const sp = 19 * power * this.stats.throwPower;
     e.x = this.x + this.aimX * 0.7; e.z = this.z + this.aimZ * 0.7; e.y = 1.2;
@@ -366,7 +395,7 @@ export class Enemy extends Creature {
   }
   set(state) { this.state = state; this.stateT = 0; }
   update(dt) {
-    const g = this.game, pl = g.player;
+    const g = this.game, pl = g.nearestPlayer(this.x, this.z);
     this.stateT += dt;
     if (this.carried) {
       this.action = null;
@@ -408,7 +437,7 @@ export class Enemy extends Creature {
           this.set('windup');
           this.lockX = (pl.x - this.x) / d; this.lockZ = (pl.z - this.z) / d;
           if (def.ai === 'brute') this.tele = this.game.telegraphCircle(this.x + this.lockX * 1.3, this.z + this.lockZ * 1.3, 1.7, this.windup);
-          this.game.sfx.play('windup', { pitch: def.ai === 'brute' ? 0.5 : 1.3 });
+          this.game.fx('sx', { n: 'windup', o: { pitch: def.ai === 'brute' ? 0.5 : 1.3 } });
         }
       } else if (this.state === 'windup') {
         this.action = 'windup'; this.actionP = this.stateT / this.windup;
@@ -489,7 +518,7 @@ export class Mantis extends Creature {
   }
   get controllable() { return !this.airborne; }
   update(dt) {
-    const g = this.game, pl = g.player;
+    const g = this.game, pl = g.nearestPlayer(this.x, this.z);
     this.stateT += dt; this.cooldown -= dt;
     this.desiredX = this.desiredZ = 0;
     if (this.active && pl && !pl.dead) this.think(dt, pl);
@@ -507,14 +536,14 @@ export class Mantis extends Creature {
         if (d > 3) { this.desiredX = toX * 2.4 * fast; this.desiredZ = toZ * 2.4 * fast; }
         if (this.cooldown > 0) break;
         // Sweep when crowded, but never twice in a row: hugging her must not stall her pattern.
-        if (d < 4.2 && !this.justSwept) { this.justSwept = true; this.set('telegraph'); this.next = 'sweep'; this.tele = g.telegraphArc(this, 4.2, 3.6, 0.7 / fast); g.sfx.play('screech', { pitch: 1.2 }); break; }
+        if (d < 4.2 && !this.justSwept) { this.justSwept = true; this.set('telegraph'); this.next = 'sweep'; this.tele = g.telegraphArc(this, 4.2, 3.6, 0.7 / fast); g.fx('sx', { n: 'screech', o: { pitch: 1.2 } }); break; }
         this.justSwept = false;
         const pick = ['summon', 'charge', 'nova', 'summon', 'charge'][this.pattern++ % 5];
         if (pick === 'charge') {
           this.set('telegraph'); this.next = 'charge';
           this.lockX = toX; this.lockZ = toZ;
           this.tele = g.telegraphLine(this.x, this.z, toX, toZ, 16, 1.6, 0.9 / fast);
-          g.sfx.play('screech', { pitch: 0.8 });
+          g.fx('sx', { n: 'screech', o: { pitch: 0.8 } });
         } else if (pick === 'nova') { this.set('cast'); this.next = 'nova'; }
         else { this.set('cast'); this.next = 'summon'; }
         break;
@@ -524,8 +553,8 @@ export class Mantis extends Creature {
         if (this.next === 'sweep') this.faceToward(pl.x, pl.z, dt, 3);
         else this.faceToward(this.x + this.lockX, this.z + this.lockZ, dt, 20);
         if (this.stateT >= (this.next === 'sweep' ? 0.7 : 0.9) / fast) {
-          if (this.next === 'sweep') { this.set('sweep'); this.swept = false; g.sfx.play('swing', { pitch: 0.5 }); }
-          else { this.set('charge'); g.sfx.play('roar'); }
+          if (this.next === 'sweep') { this.set('sweep'); this.swept = false; g.fx('sx', { n: 'swing', o: { pitch: 0.5 } }); }
+          else { this.set('charge'); g.fx('sx', { n: 'roar' }); }
         }
         break;
       case 'sweep':
@@ -533,10 +562,10 @@ export class Mantis extends Creature {
         if (!this.swept && this.stateT > 0.18) {
           this.swept = true;
           const a = this.facing;
-          for (const e of g.world.query(this.x, this.z, 4.2, e => e !== this && (e === pl || e.team === 'enemy'))) {
+          for (const e of g.world.query(this.x, this.z, 4.2, e => e !== this && ((e instanceof Player && !e.ghost) || e.team === 'enemy'))) {
             const ea = angleTo(this.x, this.z, e.x, e.z);
             if (Math.abs(angDiff(ea, a)) > 1.8) continue;
-            const info = { amount: e === pl ? 22 : 40, dirX: Math.sin(ea), dirZ: Math.cos(ea), knock: 16, lift: 4, team: 'boss', kind: 'scythe', source: this };
+            const info = { amount: e instanceof Player ? 22 : 40, dirX: Math.sin(ea), dirZ: Math.cos(ea), knock: 16, lift: 4, team: 'boss', kind: 'scythe', source: this };
             g.damage(e, info);
           }
         }
@@ -545,15 +574,15 @@ export class Mantis extends Creature {
       case 'charge':
         this.action = 'charge';
         this.desiredX = this.lockX * 15 * fast; this.desiredZ = this.lockZ * 15 * fast;
-        if (Math.hypot(pl.x - this.x, pl.z - this.z) < this.radius + pl.radius + 0.3 && !this.chargeHit) {
-          this.chargeHit = true;
-          g.damage(pl, { amount: 24, dirX: this.lockX, dirZ: this.lockZ, knock: 20, team: 'boss', source: this });
+        for (const k of g.players) if (!k.ghost && Math.hypot(k.x - this.x, k.z - this.z) < this.radius + k.radius + 0.3 && !(this.chargeHit ??= new Set()).has(k)) {
+          this.chargeHit.add(k);
+          g.damage(k, { amount: 24, dirX: this.lockX, dirZ: this.lockZ, knock: 20, team: 'boss', source: this });
         }
         // Anything small in her way gets mulched.
         for (const e of g.world.query(this.x, this.z, this.radius + 0.2, e => e.team === 'enemy' && e !== this && !e.carried)) {
           g.damage(e, { amount: 60, dirX: this.lockX + (fx.f() - 0.5), dirZ: this.lockZ + (fx.f() - 0.5), knock: 18, lift: 6, team: 'boss', kind: 'trample', source: this });
         }
-        if (this.stateT > 2.2) { this.set('stalk'); this.chargeHit = false; this.cooldown = 1; }
+        if (this.stateT > 2.2) { this.set('stalk'); this.chargeHit = null; this.cooldown = 1; }
         break;
       case 'stunned':
         this.action = 'stunned';
@@ -573,7 +602,7 @@ export class Mantis extends Creature {
   }
   onWall(hit) {
     if (this.state === 'charge' && hit.speed > 5) {
-      this.set('stunned'); this.chargeHit = false;
+      this.set('stunned'); this.chargeHit = null;
       this.vx = hit.nx * 4; this.vz = hit.nz * 4;
       this.game.onBossWall(this, hit);
     }
@@ -585,7 +614,7 @@ export class Pollen extends Entity {
   constructor(game, x, z, vx, vz, dmg, { heart = false } = {}) {
     super(x, z);
     this.game = game; this.vx = vx; this.vz = vz; this.dmg = dmg; this.y = heart ? 1.0 : 1.0;
-    this.radius = 0.22; this.team = 'enemy'; this.hittable = true; this.restitution = 0;
+    this.radius = 0.22; this.team = 'enemy'; this.hittable = true; this.restitution = 0; this.heart = heart;
     const k = game.goreKit;
     this.mesh = heart ? k.part('heart', 0xff5fa2, { s: 0.45, outline: 0.03 }) : k.part('sphere', 0xffe066, { s: 0.38, outline: 0.03, mat: { emissive: 0xffd23a, emissiveIntensity: 0.5 } });
     game.scene.add(this.mesh);
@@ -603,8 +632,9 @@ export class Pollen extends Entity {
     if (wall || this.life <= 0) { this.pop(); return; }
     const g = this.game;
     if (this.team === 'enemy') {
-      const pl = g.player;
-      if (pl && Math.hypot(pl.x - this.x, pl.z - this.z) < pl.radius + this.radius) {
+      const pl = g.players.find(k => !k.ghost && Math.hypot(k.x - this.x, k.z - this.z) < k.radius + this.radius + (k.parryT > 0 ? 0.5 : 0));
+      if (pl && pl.parryT > 0) { g.parry(pl, this); return; }
+      if (pl) {
         const l = Math.hypot(this.vx, this.vz) || 1;
         if (g.damage(pl, { amount: this.dmg, dirX: this.vx / l, dirZ: this.vz / l, knock: 4, team: 'enemy', source: this })) this.pop();
       }
@@ -618,7 +648,7 @@ export class Pollen extends Entity {
     this.mesh.position.set(this.x, this.y + Math.sin(this.age * 12) * 0.08, this.z);
     this.mesh.rotation.y += dt * 8;
   }
-  pop() { this.dead = true; this.game.gore.puff(this.x, this.y, this.z, this.team === 'player' ? 0xff9ecb : 0xffe066); }
+  pop() { this.dead = true; this.game.fx('pf', { x: Math.round(this.x * 100) / 100, y: 1, z: Math.round(this.z * 100) / 100, c: this.team === 'player' ? 0xff9ecb : 0xffe066 }); }
   onRemove() { this.game.scene.remove(this.mesh); }
 }
 
@@ -633,7 +663,7 @@ export class Gem extends Entity {
     this.vx = Math.cos(a) * sp; this.vz = Math.sin(a) * sp; this.vy = fx.f(5, 9); this.y = 0.6;
   }
   update(dt) {
-    const pl = this.game.player;
+    const pl = this.game.nearestPlayer(this.x, this.z);
     this.vx *= Math.exp(-2 * dt); this.vz *= Math.exp(-2 * dt);
     if (pl && this.age > 0.5) {
       const dx = pl.x - this.x, dz = pl.z - this.z, d = Math.hypot(dx, dz);
@@ -660,10 +690,10 @@ export class Potion extends Entity {
     this.mesh = g; game.scene.add(g);
   }
   update(dt) {
-    const pl = this.game.player;
+    const pl = this.game.nearestPlayer(this.x, this.z);
     this.mesh.position.set(this.x, 0.15 + Math.sin(this.age * 3) * 0.08, this.z);
     this.mesh.rotation.y += dt * 2;
-    if (pl && Math.hypot(pl.x - this.x, pl.z - this.z) < 0.7 && pl.potions < 5) { this.dead = true; this.game.onPickupPotion(this); }
+    if (pl && Math.hypot(pl.x - this.x, pl.z - this.z) < 0.7 && (pl.remote || pl.potions < 5)) { this.dead = true; this.game.onPickupPotion(this, pl); }
   }
   onRemove() { this.game.scene.remove(this.mesh); }
 }

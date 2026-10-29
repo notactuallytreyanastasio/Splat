@@ -23,7 +23,7 @@ for (const seed of seeds) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message + '\n' + (e.stack ?? '')));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  const q = new URLSearchParams({ seed, speed, bot: 1, ...(args.room != null ? { room: args.room } : {}), ...(args.god ? { god: 1 } : {}), ...(args.skill ? { botskill: args.skill } : {}) });
+  const q = new URLSearchParams({ seed, speed, bot: 1, ...(args.start != null ? { start: args.start } : {}), ...(args.god ? { god: 1 } : {}), ...(args.skill ? { botskill: args.skill } : {}) });
   await page.goto(`${url}/?${q}`);
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   const shots = [];

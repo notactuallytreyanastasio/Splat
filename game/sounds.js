@@ -29,5 +29,6 @@ export function defineSounds(s) {
   s.define('screech', (s, t, o) => { s.tone(t, { type: 'sawtooth', f0: 900 * P(o), f1: 1400 * P(o), dur: 0.5, vol: 0.12 }); s.tone(t, { type: 'square', f0: 1210 * P(o), f1: 1900 * P(o), dur: 0.5, vol: 0.05 }); });
   s.define('roar', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 160, f1: 60, dur: 1.0, vol: 0.25 }); s.noise(t, { dur: 0.9, vol: 0.3, f0: 800, f1: 100, type: 'lowpass' }); });
   s.define('summon', (s, t) => [880, 660, 990].forEach((f, i) => s.tone(t + i * 0.1, { type: 'triangle', f0: f, dur: 0.15, vol: 0.1 })));
+  s.define('parry', (s, t) => { s.tone(t, { type: 'triangle', f0: 1568, dur: 0.5, vol: 0.22 }); s.tone(t, { type: 'sine', f0: 2349, dur: 0.35, vol: 0.12 }); s.tone(t + 0.04, { type: 'sine', f0: 3136, dur: 0.25, vol: 0.06 }); });
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
 }

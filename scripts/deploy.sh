@@ -18,7 +18,7 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/node_modules/three/build" "$STAGE/node_modules/three/examples/jsm/geometries" "$STAGE/tools"
 cp index.html editor.html "$STAGE/"
-cp -R engine game "$STAGE/"
+cp -R engine game vendor "$STAGE/"
 cp tools/models.html "$STAGE/tools/"
 cp node_modules/three/build/three.module.js "$STAGE/node_modules/three/build/"
 cp node_modules/three/examples/jsm/geometries/RoundedBoxGeometry.js "$STAGE/node_modules/three/examples/jsm/geometries/"

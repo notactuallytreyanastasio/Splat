@@ -18,14 +18,14 @@ export class Bot {
   }
   think(dt) {
     const g = this.g, p = g.player, it = emptyIntent();
-    if (g.state === 'boon') {
+    if (g.offers) {
       const ids = g.offers.map(b => b.id);
       let best = 0, bestRank = 99;
       ids.forEach((id, i) => { const r = BOON_PRIORITY.indexOf(id); if (r >= 0 && r < bestRank) { bestRank = r; best = i; } });
       it.choose = best;
       return it;
     }
-    if (p.dead || g.state !== 'play') return it;
+    if (p.dead || p.ghost || g.state !== 'play') return it;
     const ents = g.world.entities;
     this.ignore ??= new Map();
     const now = g.time;
@@ -41,6 +41,8 @@ export class Bot {
 
     // 1. Survive: dodge whatever is about to hit us.
     if ((this.alertT -= dt) <= 0) { this.alertT = 0.6; this.alert = Math.random() < this.skill; }
+    // Parry when the cue says now (the same cue a human gets).
+    if (this.alert && g.threat < 0.18 && p.parryCd <= 0 && Math.random() < 0.8) it.parry = true;
     const danger = this.alert ? this.danger(foes) : null;
     if (danger && p.dodgeCd <= 0) {
       it.moveX = danger.x; it.moveZ = danger.z; it.dodge = true; it.aimX = danger.x; it.aimZ = danger.z;

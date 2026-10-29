@@ -25,5 +25,5 @@ export class Input {
 
 // Every controller (human, bot, replay) produces this shape once per step.
 export function emptyIntent() {
-  return { moveX: 0, moveZ: 0, aimX: 0, aimZ: 1, attack: false, heavy: false, dodge: false, special: false, grab: false, potion: false, choose: -1 };
+  return { moveX: 0, moveZ: 0, aimX: 0, aimZ: 1, attack: false, heavy: false, dodge: false, special: false, grab: false, parry: false, lockNext: false, potion: false, choose: -1 };
 }
