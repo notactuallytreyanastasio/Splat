@@ -177,7 +177,7 @@ export class Game {
       case 'cf': return this.gore.confettiBurst(d.x, d.y, d.z, d.n, d.p, d.c);
       case 'sp': return this.gore.spray(d.x, d.y, d.z, d.dx, d.dz, d.n, d.p, d.c);
       case 'dc': return this.gore.decals.splat(d.x, d.z, d.r, d.c);
-      case 'ws': this.addHeat(0.06); return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
+      case 'ws': this.addHeat(0.06); this.sfx.duck(0.5, 0.15, 0.5); return this.gore.wallSplat(d.x, d.z, d.nx, d.nz, d.r, d.a, d.c);
       case 'pf': return this.gore.puff(d.x, d.y, d.z, d.c);
       case 'bud': return this.juice.bud(d.x, d.z, d.c);
       case 'tc': return this.telegraphCircle_(d.x, d.z, d.r, d.d, d.h);
@@ -412,6 +412,7 @@ export class Game {
     if ((big || d.c) && mine) this.view.kick(0.03);
     if (d.c && mine) this.hud.crit();
     this.sfx.play('hit', { pitch: d.kind === 'heavy' ? 0.6 : d.c ? 1.3 : 0.9 + Math.random() * 0.3 });
+    if (t.boss && d.kind !== 'whirl') this.sfx.duck(big ? 0.45 : 0.3, 0.1, 0.4); // the music gets out of the way of a blow on her
     this.floaters.spawn(d.c ? d.a + '!' : '' + d.a, t.x, (t.rig?.height ?? 1) + 0.4, t.z, { cls: d.c ? 'crit' : d.kind === 'impact' ? 'impact' : mine ? '' : 'ally', scale: Math.min(2, 0.8 + d.a / 40) });
     if (d.src === this.localId && this.guest) { this.telemetry.c.hits++; this.telemetry.c.dealt += d.a; }
     if (d.src === this.localId) {
@@ -482,6 +483,7 @@ export class Game {
     this.gore.kill(t, { dirX: d.dx, dirZ: d.dz, knock: d.k, team: d.tm && !this.guest ? 'player' : null, bowling: d.bw ?? 0 }, !!d.o);
     this.sfx.play('squish');
     this.sfx.play('squeak', { pitch: 0.8 + Math.random() * 0.6 });
+    if ((t.def?.mass ?? 1) >= 2 || t.elite) this.sfx.duck(0.45, 0.15, 0.5); // a big thing coming apart owns the moment
   }
   explode(x, z, r, dmg) {
     this.fx('boom', { x, z });

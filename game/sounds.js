@@ -3,11 +3,11 @@
 export function defineSounds(s) {
   const P = o => o.pitch ?? 1;
   s.define('swing', (s, t, o) => s.noise(t, { dur: 0.12, vol: 0.18, f0: 700 * P(o), f1: 3500 * P(o), q: 2 }));
-  s.define('hit', (s, t, o) => { s.noise(t, { dur: 0.16, vol: 0.5, f0: 1400 * P(o), f1: 180, q: 1.2, type: 'lowpass' }); s.tone(t, { type: 'sine', f0: 190 * P(o), f1: 50, dur: 0.14, vol: 0.45 }); });
+  s.define('hit', (s, t, o) => { s.noise(t, { dur: 0.16, vol: 0.5, f0: 1400 * P(o), f1: 180, q: 1.2, type: 'lowpass' }); s.thump(t, { f0: 190 * P(o), f1: 50, dur: 0.14, vol: 0.45, body: 0.35 }); });
   s.define('squish', (s, t) => { s.noise(t, { dur: 0.35, vol: 0.55, f0: 900, f1: 90, q: 3, type: 'lowpass' }); s.tone(t, { type: 'triangle', f0: 120, f1: 40, dur: 0.3, vol: 0.4 }); });
   s.define('squeak', (s, t, o) => s.tone(t + 0.03, { type: 'sine', f0: 1100 * P(o), f1: 1900 * P(o), dur: 0.12, vol: 0.18 }));
   s.define('splat', (s, t) => s.noise(t, { dur: 0.3, vol: 0.4, f0: 600, f1: 80, q: 4, type: 'lowpass' }));
-  s.define('thud', (s, t) => s.tone(t, { type: 'sine', f0: 140, f1: 45, dur: 0.12, vol: 0.3 }));
+  s.define('thud', (s, t) => s.thump(t, { f0: 140, f1: 45, dur: 0.12, vol: 0.3, body: 0.5 }));
   s.define('bonk', (s, t, o) => { s.tone(t, { type: 'square', f0: 330 * P(o), f1: 90 * P(o), dur: 0.14, vol: 0.18 }); s.tone(t, { type: 'sine', f0: 1320 * P(o), dur: 0.25, vol: 0.12 }); });
   // A spring, not a thud: the pitch climbs, then a second higher 'oing' rings on.
   s.define('boing', (s, t, o) => {
@@ -16,7 +16,7 @@ export function defineSounds(s) {
     s.tone(t, { type: 'triangle', f0: 1318 * P(o), f1: 1760 * P(o), dur: 0.12, vol: 0.1 });
     s.tone(t + 0.04, { type: 'sine', f0: 2637 * P(o), dur: 0.3, vol: 0.05 });
   });
-  s.define('slam', (s, t) => { s.tone(t, { type: 'sine', f0: 90, f1: 28, dur: 0.5, vol: 0.6 }); s.noise(t, { dur: 0.4, vol: 0.35, f0: 300, f1: 60, type: 'lowpass' }); });
+  s.define('slam', (s, t) => { s.thump(t, { f0: 90, f1: 28, dur: 0.5, vol: 0.6, body: 0.4 }); s.noise(t, { dur: 0.4, vol: 0.35, f0: 300, f1: 60, type: 'lowpass' }); });
   s.define('hurt', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 320, f1: 110, dur: 0.22, vol: 0.2 }); s.noise(t, { dur: 0.15, vol: 0.3, f0: 1200, f1: 300, type: 'lowpass' }); });
   s.define('dodge', (s, t) => s.noise(t, { dur: 0.18, vol: 0.15, f0: 400, f1: 2400, q: 1.5 }));
   s.define('pickup', (s, t, o) => s.tone(t, { type: 'triangle', f0: 1046 * P(o), f1: 1568 * P(o), dur: 0.09, vol: 0.12 }));
@@ -37,25 +37,54 @@ export function defineSounds(s) {
   s.define('roar', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 160, f1: 60, dur: 1.0, vol: 0.25 }); s.noise(t, { dur: 0.9, vol: 0.3, f0: 800, f1: 100, type: 'lowpass' }); });
   s.define('summon', (s, t) => [880, 660, 990].forEach((f, i) => s.tone(t + i * 0.1, { type: 'triangle', f0: f, dur: 0.15, vol: 0.1 })));
   s.define('parry', (s, t) => { s.tone(t, { type: 'triangle', f0: 1568, dur: 0.5, vol: 0.22 }); s.tone(t, { type: 'sine', f0: 2349, dur: 0.35, vol: 0.12 }); s.tone(t + 0.04, { type: 'sine', f0: 3136, dur: 0.25, vol: 0.06 }); });
-  s.define('noir', (s, t) => { s.tone(t, { type: 'sine', f0: 110, f1: 55, dur: 1.2, vol: 0.35 }); s.noise(t, { dur: 0.8, vol: 0.12, f0: 300, f1: 80, type: 'lowpass' }); s.tone(t + 0.05, { type: 'triangle', f0: 880, f1: 440, dur: 0.6, vol: 0.06 }); });
+  s.define('noir', (s, t) => { s.thump(t, { f0: 110, f1: 55, dur: 1.2, vol: 0.35, body: 0.35 }); s.noise(t, { dur: 0.8, vol: 0.12, f0: 300, f1: 80, type: 'lowpass' }); s.tone(t + 0.05, { type: 'triangle', f0: 880, f1: 440, dur: 0.6, vol: 0.06 }); });
   // Tutorial: a bright little 'got it' for each lesson, and a soft chime for the next card.
   s.define('sting', (s, t) => { [784, 988, 1175, 1568].forEach((f, i) => s.tone(t + i * 0.055, { type: 'triangle', f0: f, dur: 0.35, vol: 0.15 })); s.tone(t + 0.22, { type: 'sine', f0: 2349, f1: 3136, dur: 0.4, vol: 0.07 }); s.noise(t, { dur: 0.25, vol: 0.1, f0: 5000, f1: 9000, q: 2 }); });
   s.define('card', (s, t) => { s.tone(t, { type: 'sine', f0: 660, dur: 0.12, vol: 0.09 }); s.tone(t + 0.07, { type: 'sine', f0: 990, dur: 0.2, vol: 0.09 }); });
   // Lub-dub: two soft sub thumps, quiet enough to sit under the fight.
-  s.define('heartbeat', (s, t, o) => { s.tone(t, { type: 'sine', f0: 72, f1: 44, dur: 0.16, vol: 0.32 * (o.vol ?? 1) }); s.tone(t + 0.17, { type: 'sine', f0: 62, f1: 40, dur: 0.2, vol: 0.22 * (o.vol ?? 1) }); });
+  s.define('heartbeat', (s, t, o) => { s.thump(t, { f0: 72, f1: 44, dur: 0.16, vol: 0.32 * (o.vol ?? 1), body: 0.8 }); s.thump(t + 0.17, { f0: 62, f1: 40, dur: 0.2, vol: 0.22 * (o.vol ?? 1), body: 0.8 }); });
   s.define('bloom', (s, t, o) => { s.tone(t, { type: 'sine', f0: 380 * P(o), f1: 1150 * P(o), dur: 0.16, vol: 0.14 }); s.noise(t, { dur: 0.12, vol: 0.14, f0: 2500, f1: 900 }); });
   s.define('ragefull', (s, t) => [1046, 1318, 1568, 2093].forEach((f, i) => s.tone(t + i * 0.045, { type: 'triangle', f0: f, dur: 0.22, vol: 0.09 })));
   // The Empress: one voice per attack, so you can fight her with your eyes shut.
   s.define('scythedraw', (s, t, o) => { s.tone(t, { type: 'triangle', f0: 1400 * P(o), f1: 2800 * P(o), dur: 0.45, vol: 0.09, attack: 0.2 }); s.noise(t, { dur: 0.45, vol: 0.12, f0: 3000, f1: 7000, q: 6 }); });
   s.define('scythe', (s, t) => { s.noise(t, { dur: 0.28, vol: 0.4, f0: 500, f1: 4000, q: 1.5 }); s.tone(t, { type: 'triangle', f0: 2637, f1: 2200, dur: 0.35, vol: 0.12 }); s.tone(t, { type: 'square', f0: 180, f1: 70, dur: 0.18, vol: 0.12 }); });
-  s.define('chargerev', (s, t, o) => { s.tone(t, { type: 'sawtooth', f0: 48 * P(o), f1: 130 * P(o), dur: 0.9, vol: 0.2, attack: 0.3 }); s.noise(t, { dur: 0.9, vol: 0.25, f0: 150, f1: 700, type: 'lowpass' }); for (let i = 0; i < 4; i++) s.tone(t + i * 0.2 / P(o), { type: 'sine', f0: 110, f1: 40, dur: 0.12, vol: 0.3 }); });
+  s.define('chargerev', (s, t, o) => { s.tone(t, { type: 'sawtooth', f0: 48 * P(o), f1: 130 * P(o), dur: 0.9, vol: 0.2, attack: 0.3 }); s.noise(t, { dur: 0.9, vol: 0.25, f0: 150, f1: 700, type: 'lowpass' }); for (let i = 0; i < 4; i++) s.thump(t + i * 0.2 / P(o), { f0: 110, f1: 40, dur: 0.12, vol: 0.3, body: 0.4 }); });
   s.define('bellow', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 220, f1: 70, dur: 0.7, vol: 0.25 }); s.tone(t, { type: 'square', f0: 110, f1: 45, dur: 0.6, vol: 0.12 }); s.noise(t, { dur: 0.5, vol: 0.25, f0: 1200, f1: 200, type: 'lowpass' }); });
   s.define('novacharge', (s, t, o) => [784, 988, 1175, 1568, 1976, 2349].forEach((f, i) => s.tone(t + i * 0.12 / P(o), { type: 'triangle', f0: f * P(o), dur: 0.18, vol: 0.06 + i * 0.012 })));
   s.define('nova', (s, t) => { s.tone(t, { type: 'sine', f0: 2349, f1: 1175, dur: 0.4, vol: 0.18 }); s.tone(t, { type: 'triangle', f0: 3136, f1: 1568, dur: 0.3, vol: 0.08 }); s.noise(t, { dur: 0.35, vol: 0.22, f0: 6000, f1: 1500, q: 0.8 }); });
   s.define('brood', (s, t) => { s.noise(t, { dur: 0.6, vol: 0.4, f0: 500, f1: 120, q: 7, type: 'lowpass' }); for (let i = 0; i < 3; i++) s.tone(t + i * 0.13, { type: 'sine', f0: 140 + i * 40, f1: 60, dur: 0.12, vol: 0.25 }); });
   s.define('shriek', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 700, f1: 1700, dur: 0.75, vol: 0.14, attack: 0.05 }); s.tone(t, { type: 'square', f0: 940, f1: 2300, dur: 0.75, vol: 0.06 }); s.tone(t + 0.4, { type: 'sawtooth', f0: 1700, f1: 900, dur: 0.5, vol: 0.1 }); });
-  s.define('enrage', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 130, f1: 45, dur: 1.2, vol: 0.3 }); s.tone(t, { type: 'sawtooth', f0: 900, f1: 2000, dur: 0.6, vol: 0.1 }); s.noise(t, { dur: 1.1, vol: 0.35, f0: 900, f1: 80, type: 'lowpass' }); s.tone(t, { type: 'sine', f0: 70, f1: 30, dur: 0.9, vol: 0.5 }); });
+  s.define('enrage', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 130, f1: 45, dur: 1.2, vol: 0.3 }); s.tone(t, { type: 'sawtooth', f0: 900, f1: 2000, dur: 0.6, vol: 0.1 }); s.noise(t, { dur: 1.1, vol: 0.35, f0: 900, f1: 80, type: 'lowpass' }); s.thump(t, { f0: 70, f1: 30, dur: 0.9, vol: 0.5, body: 0.35 }); });
   s.define('bossdie', (s, t) => { s.tone(t, { type: 'sawtooth', f0: 500, f1: 2600, dur: 0.7, vol: 0.16 }); s.tone(t, { type: 'square', f0: 660, f1: 3300, dur: 0.7, vol: 0.06 }); s.noise(t, { dur: 0.7, vol: 0.2, f0: 800, f1: 5000, q: 2 }); });
   s.define('clink', (s, t, o) => { s.tone(t, { type: 'sine', f0: 2093 * P(o), dur: 0.3, vol: 0.14 }); s.tone(t, { type: 'triangle', f0: 3136 * P(o), dur: 0.18, vol: 0.06 }); });
   s.define('death', (s, t) => [392, 330, 262, 196].forEach((f, i) => s.tone(t + i * 0.18, { type: 'triangle', f0: f, dur: 0.4, vol: 0.18 })));
+
+  // The mix, measured with tools/mix.mjs (short-term loudness, loudest 50 ms, dBFS through
+  // the master chain). Windows: core combat hits about -21, big moments -15 to -19, UI
+  // chimes -24 to -26, foley -28 to -31 (frequent, so under the hits but over the music,
+  // which sits around -30). `db` is the trim that puts each sound in its window.
+  const GORE = 'gore';
+  const MIX = {
+    hit: { db: -0.5, voices: 4, group: GORE }, squish: { db: -2, voices: 3, group: GORE }, squeak: { db: 1, voices: 3, group: GORE },
+    splat: { db: 7.5, voices: 4, group: GORE }, thud: { db: 0, voices: 3, group: GORE }, pop: { db: -0.5, voices: 3, group: GORE },
+    slam: { db: -2.5, voices: 2, group: GORE, duck: [0.4, 0.15, 0.5] }, bonk: { db: 2.5, voices: 3, group: GORE },
+    hurt: { db: 7, voices: 2 }, boing: { db: -0.5, voices: 3 }, glass: { db: 4, voices: 2 }, clink: { db: 0.5, voices: 3 },
+    swing: { db: 18.5, voices: 3 }, dodge: { db: 17.5, voices: 2 }, grab: { db: 4.5, voices: 2 }, throw: { db: 11, voices: 2 },
+    whirl: { db: 9, voices: 1 }, windup: { db: 7.5, voices: 3 }, spit: { db: 7, voices: 3 },
+    pickup: { db: 7, voices: 4 }, potion: { db: -1.5, voices: 1 }, streak: { db: 7.5, voices: 1 }, wave: { db: 5, voices: 1 },
+    bloom: { db: 4, voices: 3 }, ragefull: { db: 3.5, voices: 1 }, card: { db: 2.5, voices: 1 }, gate: { db: 1.5, voices: 1 },
+    levelup: { db: -0.5, voices: 1, duck: [0.4, 0.6, 0.8] }, clear: { db: -1.5, voices: 1, duck: [0.4, 0.8, 1] },
+    sting: { db: -1, voices: 1, duck: [0.35, 0.4, 0.6] }, parry: { db: 2, voices: 2, duck: [0.45, 0.2, 0.6] },
+    death: { db: 2.5, voices: 1, duck: [0.8, 1.5, 2] }, noir: { db: -1.5, voices: 1, duck: [0.5, 0.4, 1] },
+    heartbeat: { db: -4.5, voices: 1 },
+    roar: { db: 3.5, voices: 1, duck: [0.6, 0.9, 1.2] }, shriek: { db: 2.5, voices: 1 }, enrage: { db: -2, voices: 1, duck: [0.7, 0.8, 1.5] },
+    bossdie: { db: 5.5, voices: 1, duck: [0.85, 1.6, 2.5] }, screech: { db: 4.5, voices: 2 }, summon: { db: 5.5, voices: 1 },
+    scythedraw: { db: 3.5, voices: 1 }, scythe: { db: 4.5, voices: 1 }, chargerev: { db: -1.5, voices: 1 }, bellow: { db: 1.5, voices: 1 },
+    novacharge: { db: 4.5, voices: 1 }, nova: { db: 1.5, voices: 1 }, brood: { db: 0, voices: 1 },
+  };
+  for (const [name, mix] of Object.entries(MIX)) {
+    if (!s.recipes[name]) throw new Error(`sounds: mix names unknown sound ${name}`);
+    s.mix[name] = mix;
+  }
+  for (const name in s.recipes) if (!MIX[name]) throw new Error(`sounds: ${name} has no mix entry`);
 }

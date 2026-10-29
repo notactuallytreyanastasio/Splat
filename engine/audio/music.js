@@ -52,7 +52,7 @@ export class Music {
     const ctx = this.sfx.ctx;
     this.out = ctx.createGain();
     this.out.gain.value = this.volume;
-    this.out.connect(this.sfx.master);
+    this.out.connect(this.sfx.musicBus ?? this.sfx.master);
     // A tone filter on most of the band: wide open normally, an old record when muffled.
     this.tone = ctx.createBiquadFilter();
     this.tone.type = 'lowpass'; this.tone.frequency.value = 20000;
