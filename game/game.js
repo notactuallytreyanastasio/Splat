@@ -1362,7 +1362,9 @@ export class Game {
     const p = this.player.ghost ? (this.players.find(k => !k.ghost) ?? this.player) : this.player;
     this.updateGrade(dt);
     this.fadeOccluders(dt, p);
-    this.view.follow(p.x + p.aimX * 1.2, p.z + p.aimZ * 1.2, dt, 5);
+    // camBias (world units, up-screen) lets the tutorial frame the knight below its card.
+    const bias = this.tutorial?.camBias ?? 0;
+    this.view.follow(p.x + p.aimX * 1.2 + this.view.up.x * bias, p.z + p.aimZ * 1.2 + this.view.up.z * bias, dt, 5);
     if (!frozen && this.timers.length) for (const t of this.timers.splice(0)) if ((t.t -= dt) <= 0) t.fn(); else this.timers.push(t);
     this.view.update(dt);
     this.lights.follow(this.view.center.x, this.view.center.z);

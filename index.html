@@ -358,8 +358,9 @@
   .title .modes .howto { display: inline-flex; align-items: center; gap: 6px; background: var(--lemon); }
   .title .modes .howto svg { width: 24px; height: 24px; }
   body.tutorial .help { display: none; }
-  body.tutorial .banner { top: 30%; }
-  @media (orientation: portrait) { body.tutorial .banner { top: 36%; } }
+  /* Never behind or touching the lesson card: --tut-card-b is its bottom edge (tutorial.js). */
+  body.tutorial .banner { top: max(30%, calc(var(--tut-card-b, 0px) + 30px)); }
+  @media (orientation: portrait) { body.tutorial .banner { top: max(36%, calc(var(--tut-card-b, 0px) + 30px)); } }
   .tut { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: min(580px, calc(100vw - 32px)); pointer-events: none; z-index: 4; }
   body.touching .tut { top: calc(env(safe-area-inset-top) + 64px); }
   @media (orientation: portrait) { body.touching .tut { top: calc(env(safe-area-inset-top) + 104px); } }
