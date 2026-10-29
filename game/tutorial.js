@@ -52,7 +52,7 @@ const STEPS = [
     title: 'Walk to the glowing star', icon: 'move', need: 1,
     kb: () => `${K('W')}${K('A')}${K('S')}${K('D')} to walk. Go stand in the glowing star.`,
     touch: () => 'Put a thumb down anywhere on the left half and drag to walk. Go stand in the glowing star.',
-    start: t => t.showMarker(),
+    start: t => { t.fitGoal(); t.showMarker(); },
     got: t => +(Math.hypot(t.game.player.x - t.goal.x, t.game.player.z - t.goal.z) < 1.1),
   },
   {
@@ -206,7 +206,8 @@ export class Tutorial {
     g.fx('cf', { x: r2(p.x), y: 1.6, z: r2(p.z), n: 60, p: 7 });
     g.fx('sx', { n: 'sting' });
     g.fx('sh', { a: 0.12, k: 0.02 });
-    g.say(PRAISE[this.i % PRAISE.length], p.x, 2.7, p.z, { cls: 'pinball', scale: 1.25, life: 1.1 });
+    // On a short screen the knight stands just under the card: stop the word below it.
+    g.say(PRAISE[this.i % PRAISE.length], p.x, 2.7, p.z, { cls: 'pinball', scale: 1.25, life: 1.1, minY: Math.round(this.cardBottom() + 34) });
     this.hideMarker();
   }
   ready() {
@@ -284,6 +285,50 @@ export class Tutorial {
     return { x, z };
   }
 
+  // Screen y of the bottom of the lesson card (layout box, so the slide-in does not move it).
+  cardBottom() {
+    if (this.root.firstChild) {
+      const b = this.root.offsetTop + this.root.offsetHeight;
+      if (b !== this.cardB) document.body.style.setProperty('--tut-card-b', b + 'px');
+      this.cardB = b;
+    }
+    return this.cardB ?? 0;
+  }
+  // The open lawn on screen: below the card, clear of the edges and the touch buttons.
+  onScreen(s) {
+    // A wider margin than the arrow uses (56), so camera drift does not flip the arrow on.
+    const pad = 84, W = innerWidth, H = innerHeight, touch = this.game.touch.active;
+    return s.visible && s.x > pad && s.x < W - pad - (touch && s.y > H - 300 ? 230 : 0) && s.y > this.cardBottom() + 40 && s.y < H - pad;
+  }
+  // The level's star sits east of the start, which a narrow portrait screen does not show.
+  // Pull it toward the knight until it is on screen (never closer than 2.5 tiles), so the
+  // first lesson starts with its goal in view instead of behind an arrow.
+  fitGoal() {
+    const p = this.game.player, v = this.game.view, map = this.game.map, g0 = { ...this.goal };
+    // Judge it as framed once the camera has settled under the card (see updateCamBias).
+    const shift = Math.max(0, this.cardBottom() + 130 - innerHeight / 2) - (this.camBias ?? 0) * this.ppu();
+    v.update(0);
+    for (let k = 1; k >= 0; k -= 0.05) {
+      const x = p.x + (g0.x - p.x) * k, z = p.z + (g0.z - p.z) * k;
+      if (Math.hypot(x - p.x, z - p.z) < 2.5) break;
+      if ([[0, 0], [0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => map.solidAt(x + ox, z + oz))) continue;
+      const sc = v.worldToScreen(x, 1, z);
+      if (this.onScreen({ ...sc, y: sc.y + shift })) { this.goal = { x, z }; return; }
+    }
+  }
+  // Short landscape screens: frame the knight in the space under the card rather than in
+  // the middle of the screen, where the card covers its head and everything said above it.
+  // Screen pixels per world unit of up-screen ground distance, at the view centre.
+  ppu() {
+    const v = this.game.view, a = v.worldToScreen(v.center.x, 0, v.center.z), b = v.worldToScreen(v.center.x + v.up.x, 0, v.center.z + v.up.z);
+    return a.y - b.y;
+  }
+  updateCamBias(dt) {
+    const H = innerHeight, want = this.cardBottom() + 130 - H / 2;
+    const ppu = this.ppu(), target = want > 0 && ppu > 1 ? Math.min(4, want / ppu) : 0;
+    this.camBias = (this.camBias ?? 0) + (target - (this.camBias ?? 0)) * Math.min(1, dt * 4);
+  }
+
   // ---------------------------------------------------------------- marker
   showMarker() {
     if (!this.marker) {
@@ -332,7 +377,9 @@ export class Tutorial {
     this.lastState = p.state;
     if (this.rageFill) {
       p.rage = Math.min(100, p.rage + dt * 140);
-      if (p.rage >= 100) { this.rageFill = false; g.say('FULL TANK', p.x, 2.6, p.z, { cls: 'pinball', scale: 1.2 }); g.fx('sx', { n: 'streak', o: { pitch: 1.3 } }); }
+      // A banner, not a floating word: pressing Q right away swaps it for RAINBOW BLENDER in
+      // the same place instead of stacking the two.
+      if (p.rage >= 100) { this.rageFill = false; if (p.state !== 'whirl') g.fx('bn', { t: '', s: 'FULL TANK', d: 1.6 }); g.fx('sx', { n: 'streak', o: { pitch: 1.3 } }); }
     }
     if (this.phase === 'step') {
       const s = STEPS[this.i];
@@ -355,7 +402,7 @@ export class Tutorial {
     const m = this.marker, v = this.game.view, a = this.arrow;
     const s = m?.g.visible && !m.out ? v.worldToScreen(this.goal.x, 1, this.goal.z) : null;
     const pad = 56, W = innerWidth, H = innerHeight;
-    const off = s && (!s.visible || s.x < pad || s.x > W - pad || s.y < pad + 120 || s.y > H - pad);
+    const off = s && (!s.visible || s.x < pad || s.x > W - pad || s.y < Math.max(pad + 120, this.cardBottom() + 20) || s.y > H - pad);
     a.classList.toggle('on', !!off);
     if (!off) return;
     // Clamp along the ray from the screen centre so the arrow sits where the star is.
@@ -364,6 +411,7 @@ export class Tutorial {
     a.style.transform = `translate(${cx + dx * Math.min(1, k)}px, ${cy + dy * Math.min(1, k)}px) rotate(${Math.atan2(dy, dx)}rad)`;
   }
   render(dt) {
+    this.updateCamBias(dt);
     this.updateMarker(dt);
     this.updateArrow();
     if (this.phase === 'step' && this.game.touch.active !== this.touchMode) this.renderCard();

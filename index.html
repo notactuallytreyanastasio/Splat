@@ -267,7 +267,7 @@
   .cue i { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; border: 5px solid #fff1a1; box-shadow: 0 0 0 4px var(--ink); transform: scale(var(--k, 1)); }
   .cue b { position: absolute; width: 34px; height: 34px; margin: -84px 0 0 -17px; border-radius: 50%; background: #fff1a1; border: 4px solid var(--ink); display: grid; place-items: center; font-size: 22px; }
   .cue.now i { border-color: #fff; box-shadow: 0 0 0 4px var(--ink), 0 0 30px #fff1a1; } .cue.now b { background: #fff; animation: throb .08s infinite alternate; }
-  .cue.hit:not(.on) i { animation: cuehit .3s forwards; } @keyframes cuehit { from { transform: scale(.4); opacity: 1; } to { transform: scale(2.4); opacity: 0; } }
+  .cue.hit:not(.on) i { animation: cuehit .3s forwards; } .cue.hit:not(.on) b { animation: cuebadge .3s forwards; } @keyframes cuebadge { to { transform: translateY(-14px) scale(1.3); opacity: 0; } } @keyframes cuehit { from { transform: scale(.4); opacity: 1; } to { transform: scale(2.4); opacity: 0; } }
   .floater.parry { color: #fff1a1; font-size: 36px; letter-spacing: 2px; }
   .touch .tb.parry { background: #fff6c8; }
   .touch .tb.parry.lit { background: #fff1a1; animation: throb .12s infinite alternate; box-shadow: 0 5px 0 var(--ink), 0 0 24px #fff1a1; }
@@ -358,8 +358,9 @@
   .title .modes .howto { display: inline-flex; align-items: center; gap: 6px; background: var(--lemon); }
   .title .modes .howto svg { width: 24px; height: 24px; }
   body.tutorial .help { display: none; }
-  body.tutorial .banner { top: 30%; }
-  @media (orientation: portrait) { body.tutorial .banner { top: 36%; } }
+  /* Never behind or touching the lesson card: --tut-card-b is its bottom edge (tutorial.js). */
+  body.tutorial .banner { top: max(30%, calc(var(--tut-card-b, 0px) + 30px)); }
+  @media (orientation: portrait) { body.tutorial .banner { top: max(36%, calc(var(--tut-card-b, 0px) + 30px)); } }
   .tut { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: min(580px, calc(100vw - 32px)); pointer-events: none; z-index: 4; }
   body.touching .tut { top: calc(env(safe-area-inset-top) + 64px); }
   @media (orientation: portrait) { body.touching .tut { top: calc(env(safe-area-inset-top) + 104px); } }

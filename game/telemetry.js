@@ -14,7 +14,9 @@ export class Telemetry {
     this.lastJuice = 0;
     this.longestDry = 0;
   }
-  ev(type, data) { this.log.push({ ...data, t: +this.t.toFixed(2), type }); if (this.log.length > 500) this.log.shift(); }
+  // The log keeps the last 500 events; `logged` counts every event ever, so a reader that
+  // polls can ask for what is new even after the window starts sliding.
+  ev(type, data) { this.log.push({ ...data, t: +this.t.toFixed(2), type }); this.logged = (this.logged ?? 0) + 1; if (this.log.length > 500) this.log.shift(); }
   juicy() { this.juice++; this.longestDry = Math.max(this.longestDry, this.t - this.lastJuice); this.lastJuice = this.t; }
   update(dt) {
     this.t += dt;
@@ -29,8 +31,11 @@ export class Telemetry {
     if (r) { r.clear = this.t; r.dur = +(this.t - r.enter).toFixed(1); r.hpOut = Math.round(this.g.player.hp); }
     this.ev('clear', { room: room.id, name: room.name });
   }
+  // Who did it, by name: projectiles have no type, so a butterfly's pollen and the
+  // Empress's heart volley used to both log as '?'.
+  by(src) { return src?.type ?? src?.def?.name ?? (src?.heart ? 'Empress heart' : src?.constructor?.name?.toLowerCase()) ?? '?'; }
   hit(target, info) {
-    if (target === this.g.player) { this.c.taken += info.amount; this.ev('hurt', { amount: info.amount, by: info.source?.type ?? info.source?.def?.name ?? '?' }); return; }
+    if (target === this.g.player) { this.c.taken += info.amount; this.ev('hurt', { amount: info.amount, by: this.by(info.source) }); return; }
     this.c.hits++; this.c.dealt += info.amount; if (info.crit) this.c.crits++;
     this.juicy();
   }
@@ -48,7 +53,7 @@ export class Telemetry {
   levelUp() { this.c.levels++; }
   boon(b) { this.boons.push(b.id); this.ev('boon', { id: b.id }); }
   breakable(kind) { this.c.breakables++; this.juicy(); }
-  death(info) { this.c.deaths++; this.ev('death', { by: info.source?.type ?? info.source?.def?.name }); }
+  death(info) { this.c.deaths++; this.ev('death', { by: this.by(info.source) }); }
   win() { this.won = true; this.ev('win', {}); }
   summary() {
     const g = this.g;
