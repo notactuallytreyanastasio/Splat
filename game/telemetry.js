@@ -5,7 +5,7 @@ export class Telemetry {
   constructor(game) {
     this.g = game;
     this.t = 0;
-    this.c = { kills: 0, overkills: 0, hits: 0, swings: 0, dealt: 0, taken: 0, impacts: 0, maxChain: 0, chains: 0, wallSlams: 0, grabs: 0, throws: 0, reflects: 0, parries: 0, specials: 0, potions: 0, levels: 0, breakables: 0, crits: 0, deaths: 0 };
+    this.c = { kills: 0, overkills: 0, hits: 0, swings: 0, dealt: 0, taken: 0, impacts: 0, maxChain: 0, chains: 0, wallSlams: 0, bumps: 0, grabs: 0, throws: 0, reflects: 0, parries: 0, specials: 0, potions: 0, levels: 0, breakables: 0, crits: 0, deaths: 0 };
     this.idle = 0; this.combat = 0; this.lowHp = 1; this.juice = 0;
     this.rooms = [];
     this.log = [];
@@ -37,6 +37,7 @@ export class Telemetry {
   kill(t, info, overkill) { this.c.kills++; if (overkill) this.c.overkills++; this.juicy(); this.ev('kill', { type: t.type ?? 'boss', kind: info.kind, overkill }); }
   impact(chain) { this.c.impacts++; if (chain >= 2) this.c.chains++; this.c.maxChain = Math.max(this.c.maxChain, chain); this.juicy(); }
   wallSlam() { this.c.wallSlams++; this.juicy(); }
+  bump() { this.c.bumps++; this.juicy(); }
   swing() { this.c.swings++; }
   grab() { this.c.grabs++; }
   throw_() { this.c.throws++; }

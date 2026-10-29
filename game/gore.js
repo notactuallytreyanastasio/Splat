@@ -106,6 +106,7 @@ export class Gore {
     this.stats.gibs++;
     return this.debris.add(obj, {
       vx, vy, vz, radius, bounce: 0.35,
+      onWall: (it, tx, tz) => this.game.bumpDebris(it, tx, tz),
       spin: [fx.f(-12, 12), fx.f(-12, 12), fx.f(-12, 12)],
       bleed: fx.f(0.6, 1.6),
       onBleed: (it, px, py, pz, dt) => { if (Math.random() < dt * 30) this.drop(px, py, pz, it.v.x * 0.2, 0.5, it.v.z * 0.2, fx.pick(colors), fx.f(0.04, 0.08)); },

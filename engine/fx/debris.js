@@ -11,10 +11,11 @@ export class Debris {
     this.onSettle = null; // (item) => true to take it out of the simulation
   }
   // Moves obj from wherever it lives into the scene, keeping its world transform.
-  add(obj, { vx = 0, vy = 0, vz = 0, spin = [0, 0, 0], radius = 0.15, bleed = 0, bounce = 0.35, onBounce = null, onBleed = null, life = Infinity } = {}) {
+  // onWall(item, tx, tz) => true when the owner handled hitting that solid tile itself.
+  add(obj, { vx = 0, vy = 0, vz = 0, spin = [0, 0, 0], radius = 0.15, bleed = 0, bounce = 0.35, onBounce = null, onBleed = null, onWall = null, life = Infinity } = {}) {
     obj.updateWorldMatrix(true, false);
     this.scene.attach(obj);
-    const it = { obj, v: new THREE.Vector3(vx, vy, vz), w: new THREE.Vector3(...spin), radius, bleed, bounce, onBounce, onBleed, rest: 0, life, sink: 0 };
+    const it = { obj, v: new THREE.Vector3(vx, vy, vz), w: new THREE.Vector3(...spin), radius, bleed, bounce, onBounce, onBleed, onWall, rest: 0, life, sink: 0 };
     this.items.push(it);
     if (this.items.length > this.max) this.retire();
     return it;
@@ -41,7 +42,9 @@ export class Debris {
       }
       it.v.y -= 24 * dt;
       const nx = p.x + it.v.x * dt, nz = p.z + it.v.z * dt;
-      if (this.solidAt && this.solidAt(nx, nz) && p.y < 1.5) { it.v.x *= -0.4; it.v.z *= -0.4; it.onBounce?.(it, p.x, p.y, p.z, 'wall'); }
+      if (this.solidAt && this.solidAt(nx, nz) && p.y < 1.5) {
+        if (!it.onWall?.(it, Math.floor(nx), Math.floor(nz))) { it.v.x *= -0.4; it.v.z *= -0.4; it.onBounce?.(it, p.x, p.y, p.z, 'wall'); }
+      }
       else { p.x = nx; p.z = nz; }
       p.y += it.v.y * dt;
       if (p.y < this.floorY + it.radius) {

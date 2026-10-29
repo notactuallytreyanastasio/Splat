@@ -89,10 +89,11 @@ export function buildLevelMeshes(scene, L, rng) {
   const kit = new ToonKit();
   const props = new THREE.Group();
   const occluders = [];
+  const bumpers = new Map(); // tz * w + tx -> mushroom group
   scene.add(props);
   for (let z = 0; z < map.h; z++) for (let x = 0; x < map.w; x++) {
     const ch = map.at(x, z);
-    if (ch === 'o') { const m = mushroom(new ToonKit(), x + 0.5, z + 0.5, rng); props.add(m); occluders.push(m); }
+    if (ch === 'o') { const m = mushroom(new ToonKit(), x + 0.5, z + 0.5, rng); props.add(m); occluders.push(m); bumpers.set(z * map.w + x, m); }
     else if (ch === '*') props.add(flower(kit, x + 0.5, z + 0.5, rng, 0.7 + rng.next() * 0.5));
     else if (ch === '#') {
       const s = style(x, z);
@@ -105,19 +106,57 @@ export function buildLevelMeshes(scene, L, rng) {
   const decor = props.children.filter(c => !occluders.includes(c));
   if (decor.length) { scene.add(bakeStatic(decor)); for (const c of decor) props.remove(c); }
   for (const d of L.doors) { d.mesh = gate(kit, d); d.mesh.position.y = -2; scene.add(d.mesh); }
-  return { mesh, props, occluders };
+  return { mesh, props, occluders, bumpers, w: map.w, wobbling: new Set() };
+}
+
+// Mushrooms are pinball bumpers. A hit squashes the cap and leans the whole stalk away
+// from the blow; a stiff, underdamped spring brings it back with a few wobbles.
+export function bumpMushroom(L, tx, tz, nx, nz, power) {
+  const m = L.bumpers.get(tz * L.w + tx);
+  if (!m) return;
+  const u = m.userData;
+  u.sqV = (u.sqV ?? 0) - 6 - power * 0.5;
+  u.lvx = (u.lvx ?? 0) - nx * (2.5 + power * 0.15);
+  u.lvz = (u.lvz ?? 0) - nz * (2.5 + power * 0.15);
+  u.flash = 1;
+  L.wobbling.add(m);
+}
+export function updateMushrooms(L, dt) {
+  for (const m of L.wobbling) {
+    const u = m.userData;
+    u.sq ??= 1; u.lx ??= 0; u.lz ??= 0;
+    u.sqV += (-(u.sq - 1) * 420 - u.sqV * 9) * dt; u.sq = Math.max(0.55, Math.min(1.45, u.sq + u.sqV * dt));
+    u.lvx += (-u.lx * 260 - u.lvx * 8) * dt; u.lx += u.lvx * dt;
+    u.lvz += (-u.lz * 260 - u.lvz * 8) * dt; u.lz += u.lvz * dt;
+    u.flash = Math.max(0, u.flash - dt * 5);
+    // The cap takes the squash; the stalk only gives a little.
+    u.head.scale.set(1 / Math.sqrt(u.sq), u.sq, 1 / Math.sqrt(u.sq));
+    m.scale.set(1, 0.85 + 0.15 * u.sq, 1);
+    m.rotation.set(Math.max(-0.35, Math.min(0.35, u.lz)), 0, -Math.max(-0.35, Math.min(0.35, u.lx)));
+    u.kit.flash(u.flash * 0.6, 0xffffff);
+    if (Math.abs(u.sq - 1) + Math.abs(u.sqV) + Math.abs(u.lx) + Math.abs(u.lz) + Math.abs(u.lvx) + Math.abs(u.lvz) < 0.004 && u.flash <= 0) {
+      u.sq = 1; u.sqV = u.lx = u.lz = u.lvx = u.lvz = 0;
+      u.head.scale.set(1, 1, 1); m.scale.set(1, 1, 1); m.rotation.set(0, 0, 0);
+      L.wobbling.delete(m);
+    }
+  }
 }
 
 function mushroom(kit, x, z, rng) {
   const g = new THREE.Group();
   const cap = RAINBOW[rng.int(0, 5)];
   kit.part('cylinder', 0xfff3e0, { s: [0.45, 1.6, 0.45], p: [0, 0.8, 0], parent: g });
-  kit.part('sphere', cap, { s: [1.3, 0.8, 1.3], p: [0, 1.75, 0], parent: g });
+  // Cap and spots hang off one head group so a bump can squash them together.
+  const head = new THREE.Group();
+  head.position.y = 1.6;
+  g.add(head);
+  kit.part('sphere', cap, { s: [1.3, 0.8, 1.3], p: [0, 0.15, 0], parent: head });
   for (let i = 0; i < 5; i++) {
     const a = i * 1.3 + rng.next();
-    kit.part('sphere', 0xffffff, { s: [0.2, 0.08, 0.2], p: [Math.cos(a) * 0.4, 1.98 + (i % 2) * 0.05, Math.sin(a) * 0.4], r: [Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5], parent: g, outline: 0.01 });
+    kit.part('sphere', 0xffffff, { s: [0.2, 0.08, 0.2], p: [Math.cos(a) * 0.4, 0.38 + (i % 2) * 0.05, Math.sin(a) * 0.4], r: [Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5], parent: head, outline: 0.01 });
   }
   g.position.set(x, 0, z);
+  g.userData.head = head; g.userData.kit = kit;
   return g;
 }
 function flower(kit, x, z, rng, s = 1) {
