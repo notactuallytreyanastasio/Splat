@@ -24,16 +24,22 @@ export class Sfx {
     this.recipes[name]?.(this, now, opts);
   }
   // Building blocks for recipes.
-  tone(t, { type = 'sine', f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005, out = this.master } = {}) {
+  // `wave` is a PeriodicWave (one oscillator for a whole timbre); `hold` sustains the peak
+  // for that many seconds before the decay, so a pad swells and rings instead of plucking;
+  // `pan` adds a stereo panner only when asked for.
+  tone(t, { type = 'sine', wave = null, f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005, hold = 0, pan = null, out = this.master } = {}) {
     const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    o.type = type;
+    if (wave) o.setPeriodicWave(wave); else o.type = type;
     o.frequency.setValueAtTime(f0, t);
-    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(vol, t + attack);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(out);
-    o.start(t); o.stop(t + dur + 0.02);
+    if (hold > 0) g.gain.setValueAtTime(vol, t + attack + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, Math.max(t + dur, t + attack + hold + 0.05));
+    let node = o.connect(g);
+    if (pan != null && this.ctx.createStereoPanner) { const p = this.ctx.createStereoPanner(); p.pan.value = pan; node = node.connect(p); }
+    node.connect(out);
+    o.start(t); o.stop(Math.max(t + dur, t + attack + hold + 0.05) + 0.02);
   }
   noise(t, { dur = 0.2, vol = 0.3, f0 = 2000, f1 = f0, q = 1, type = 'bandpass', out = this.master } = {}) {
     const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
