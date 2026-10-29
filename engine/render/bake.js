@@ -14,9 +14,17 @@ export function bakeStatic(roots, { outline = 0.03, shadow = true } = {}) {
       if (!o.isMesh || o.name === 'outline' || o.isInstancedMesh) return;
       const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
       g.applyMatrix4(o.matrixWorld);
-      const p = g.attributes.position.array, n = g.attributes.normal.array;
+      const p = g.attributes.position.array, n = g.attributes.normal.array, vc = g.attributes.color?.array;
+      // Rig-baked meshes keep their colors per vertex; material.color only tints. A
+      // greyed (dead) material bakes grey.
       _c.copy(o.material.color ?? _c.set(0xffffff));
-      for (let i = 0; i < p.length; i += 3) { pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]); col.push(_c.r, _c.g, _c.b); }
+      const desat = o.material.userData?.desat?.value ?? 0;
+      for (let i = 0; i < p.length; i += 3) {
+        pos.push(p[i], p[i + 1], p[i + 2]); nor.push(n[i], n[i + 1], n[i + 2]);
+        let r = _c.r * (vc ? vc[i] : 1), gg = _c.g * (vc ? vc[i + 1] : 1), b = _c.b * (vc ? vc[i + 2] : 1);
+        if (desat) { const l = r * 0.299 + gg * 0.587 + b * 0.114; r += (l * 0.92 - r) * desat; gg += (l * 0.9 - gg) * desat; b += (l * 0.95 - b) * desat; }
+        col.push(r, gg, b);
+      }
       if (o.children.some(c => c.name === 'outline')) for (let i = 0; i < p.length; i++) { opos.push(p[i]); onor.push(n[i]); }
       g.dispose();
     });

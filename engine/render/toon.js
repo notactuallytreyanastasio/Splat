@@ -17,11 +17,21 @@ export function toonRamp() {
 const RIM = `
   float rimF = 1.0 - max(dot(normalize(vViewPosition), normal), 0.0);
   outgoingLight += vec3(1.0, 0.96, 1.0) * smoothstep(0.62, 0.68, rimF) * 0.28;
+  float lum = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
+  outgoingLight = mix(outgoingLight, vec3(lum) * vec3(0.92, 0.9, 0.95), uDesat);
+  outgoingLight = mix(outgoingLight, uTint.rgb * (0.35 + lum * 0.8), uTint.a);
   #include <opaque_fragment>`;
 
+// Every toon material carries its own uDesat (0 colorful, 1 grey) and uTint (rgb, amount)
+// so one dead bug can drain to grey, or one live bug turn into a red silhouette, without
+// touching every bug that shares its colors.
 function addRim(mat) {
+  mat.userData.desat = { value: 0 };
+  mat.userData.tint = { value: new THREE.Vector4(1, 0, 0, 0) };
   mat.onBeforeCompile = shader => {
-    shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', RIM);
+    shader.uniforms.uDesat = mat.userData.desat;
+    shader.uniforms.uTint = mat.userData.tint;
+    shader.fragmentShader = 'uniform float uDesat;\nuniform vec4 uTint;\n' + shader.fragmentShader.replace('#include <opaque_fragment>', RIM);
   };
   return mat;
 }
@@ -99,6 +109,7 @@ function starGeometry() {
   return g;
 }
 
+const _tint = new THREE.Color();
 // A ToonKit owns the materials of one model so the model can flash on hit without
 // flashing every other model that shares its colors.
 export class ToonKit {
@@ -126,6 +137,10 @@ export class ToonKit {
     if (o.name) mesh.name = o.name;
     if (o.parent) o.parent.add(mesh);
     return mesh;
+  }
+  tint(amount, color = 0xff0000) {
+    const c = _tint.set(color);
+    for (const m of this.list) m.userData.tint?.value.set(c.r, c.g, c.b, amount);
   }
   flash(v, color = 0xffffff) {
     for (const m of this.list) { m.emissive.setHex(color); m.emissiveIntensity = v; }

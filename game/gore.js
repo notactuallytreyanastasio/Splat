@@ -39,6 +39,7 @@ export class Gore {
     scene.add(this.wallMesh);
     this.wallNext = 0; this.wallMax = coarse ? 250 : 500;
     this.fountains = [];
+    this.draining = [];
     this.wallBlobs = [];
     this.stats = { droplets: 0, gibs: 0 };
   }
@@ -78,6 +79,9 @@ export class Gore {
     this.decals.splat(t.x, t.z, 0.5 + t.radius * 0.6, '#c4002a');
     this.confettiBurst(t.x, t.y + h, t.z, overkill ? 40 : 18, 6);
     t.rig.kit.flash(0);
+    // The dead lose their color; their blood keeps it.
+    t.rig.kit.tint(0);
+    for (const m of t.rig.kit.list) if (m.userData.desat) this.draining.push({ m, t: 0 });
     const pieces = overkill ? t.rig.gibs : [t.rig.gibs[0], t.rig.tilt];
     // The body keeps the momentum of the blow that killed it, and while it is fast it
     // is a projectile: corpses and shrapnel are weapons too.
@@ -165,6 +169,7 @@ export class Gore {
     this.debris.update(dt);
     this.decals.update(dt);
     this.projectiles();
+    for (let i = this.draining.length - 1; i >= 0; i--) { const d = this.draining[i]; d.t += dt; d.m.userData.desat.value = Math.min(1, d.t / 0.35); if (d.t >= 0.35) this.draining.splice(i, 1); }
     if (this.settled.length >= 10 || (this.settled.length && (this.bakeT = (this.bakeT ?? 0) + dt) > 3)) { this.bakeT = 0; this.bakeSettled(); }
     for (let i = this.fountains.length - 1; i >= 0; i--) {
       const f = this.fountains[i];

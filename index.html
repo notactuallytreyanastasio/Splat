@@ -91,6 +91,8 @@
   .audio { position: absolute; top: 8px; right: 10px; width: 38px; height: 38px; border-radius: 50%; border: 4px solid var(--ink); background: #fff; color: var(--ink); font: 700 18px Fredoka, system-ui; pointer-events: auto; box-shadow: 0 3px 0 var(--ink); padding: 0; z-index: 6; }
   .audio.muted { background: #eee; }
   body.touching .audio { top: calc(env(safe-area-inset-top) + 56px); right: calc(env(safe-area-inset-right) + 10px); }
+  /* noir: the HUD keeps its reds, loses the pastels */
+  body.noir #hud .orb.rage, body.noir #hud .xp, body.noir #hud .gems, body.noir .touch .tb:not(.big) { filter: grayscale(1) contrast(1.2); transition: filter .3s; }
   .roster { position: absolute; top: 34px; left: 12px; font-size: 14px; font-weight: 700; }
   .roster div { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
   .roster i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); border: 3px solid var(--ink); }

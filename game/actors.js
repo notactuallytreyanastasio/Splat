@@ -127,6 +127,10 @@ export class Creature extends Entity {
     r.tilt.rotation.z = -clamp(lx, -0.9, 0.9);
     const sq = this.squash;
     r.tilt.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
+    // In noir rage you only see your targets: living bugs glow pure red, which the
+    // color grade lets through while everything else goes black and white.
+    const noir = this.team === 'enemy' && !this.dead ? this.game.view.grade.noir : 0;
+    if (noir !== this.noirTint) { r.kit.tint(noir * 0.9, 0xff0a0a); this.noirTint = noir; }
     r.kit.flash(this.flash * 0.9, this.flashColor);
     r.pose(r, { t: this.t, phase: this.phase, walk: clamp(sp / (this.def?.speed ?? 4), 0, 1), action: this.action, p: this.actionP, combo: this.combo ?? 0, seed: this.seed, air: this.airborne || this.launched || !!this.carried });
   }

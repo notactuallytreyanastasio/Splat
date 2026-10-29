@@ -429,6 +429,7 @@ export class Game {
   killFx(d) {
     const t = this.world.byId.get(d.id);
     if (!t || !t.rig) return;
+    this.bodyCount = (this.bodyCount ?? 0) + 1;
     t.dead = true;
     if (t.carried === this.player) this.player.holding = null;
     t.carried = null;
@@ -925,6 +926,21 @@ export class Game {
     r.pip.position.set(0, (e.rig?.height ?? 1) + 0.6 + Math.sin(this.time * 6) * 0.1, 0);
     r.pip.rotation.y += dt * 3;
   }
+  // Every kill drains a little color from the world you see. Full rage (and the blender)
+  // is noir: black and white, blood still red, the band muffled like an old record.
+  updateGrade(dt) {
+    const g = this.view.grade, p = this.player;
+    const sat = Math.max(0.15, 1 - (this.bodyCount ?? 0) / 85);
+    const noir = this.state === 'play' && !p.ghost && (p.rage >= 100 || p.state === 'whirl') ? 1 : 0;
+    g.sat += (sat - g.sat) * Math.min(1, dt * 1.5);
+    g.noir += (noir - g.noir) * Math.min(1, dt * (noir ? 5 : 2));
+    if (noir && !this.wasNoir) { this.sfx.play('noir'); this.view.kick(0.03); }
+    this.wasNoir = noir;
+    // The band follows the color: a drained world sounds muffled and warped, noir like an old record.
+    this.music.color = g.sat;
+    this.music.setTone(Math.min(800 + (1 - g.noir) * 19200, 2600 + g.sat * g.sat * 17400));
+    document.body.classList.toggle('noir', g.noir > 0.5);
+  }
   // Tall props standing between the camera and the player go see-through.
   fadeOccluders(dt, p) {
     const off = this.view.offset, l = Math.hypot(off.x, off.z), cx = off.x / l, cz = off.z / l;
@@ -950,6 +966,7 @@ export class Game {
     else this.loop.timeScale += (1 - this.loop.timeScale) * Math.min(1, dt * 4);
     // A ghost watches a living friend.
     const p = this.player.ghost ? (this.players.find(k => !k.ghost) ?? this.player) : this.player;
+    this.updateGrade(dt);
     this.fadeOccluders(dt, p);
     this.view.follow(p.x + p.aimX * 1.2, p.z + p.aimZ * 1.2, dt, 5);
     this.lights.follow(this.view.focus.x, this.view.focus.z);

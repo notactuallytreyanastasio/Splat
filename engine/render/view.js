@@ -1,6 +1,7 @@
 // Three-quarter "isometric" camera: fixed yaw, steep pitch, narrow FOV so it reads as iso
 // while keeping real perspective depth. Owns screen shake and screen<->ground mapping.
 import * as THREE from 'three';
+import { Grade } from './grade.js';
 
 export class IsoView {
   constructor(container, { fov = 30, distance = 23, pitch = 54, yaw = 45, background = 0xffe9f6 } = {}) {
@@ -16,6 +17,7 @@ export class IsoView {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
     Object.assign(this.renderer.domElement.style, { width: '100%', height: '100%', display: 'block' });
+    this.grade = new Grade(this.renderer, { samples: this.coarse ? 0 : 4 });
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(background);
     this.camera = new THREE.PerspectiveCamera(fov, 1, 0.5, 200);
@@ -45,6 +47,7 @@ export class IsoView {
   resize() {
     const w = this.container?.clientWidth || innerWidth, h = this.container?.clientHeight || innerHeight;
     this.renderer.setSize(w, h, false);
+    this.grade?.setSize();
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     // A fixed vertical FOV leaves a portrait screen seeing a sliver; pull back to keep the sides.
@@ -93,5 +96,5 @@ export class IsoView {
     if (this.slowT > 1500 && this.ratio > 0.6) { this.ratio = Math.max(0.6, this.ratio * 0.85); this.renderer.setPixelRatio(this.ratio); this.resize(); this.slowT = 0; }
     if (this.fastT > 6000 && this.ratio < this.maxRatio) { this.ratio = Math.min(this.maxRatio, this.ratio * 1.1); this.renderer.setPixelRatio(this.ratio); this.resize(); this.fastT = 0; }
   }
-  render() { this.renderer.render(this.scene, this.camera); }
+  render() { this.grade.render(this.scene, this.camera); }
 }
