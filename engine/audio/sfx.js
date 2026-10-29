@@ -24,7 +24,7 @@ export class Sfx {
     this.recipes[name]?.(this, now, opts);
   }
   // Building blocks for recipes.
-  tone(t, { type = 'sine', f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005 } = {}) {
+  tone(t, { type = 'sine', f0 = 440, f1 = f0, dur = 0.15, vol = 0.3, attack = 0.005, out = this.master } = {}) {
     const o = this.ctx.createOscillator(), g = this.ctx.createGain();
     o.type = type;
     o.frequency.setValueAtTime(f0, t);
@@ -32,10 +32,10 @@ export class Sfx {
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(out);
     o.start(t); o.stop(t + dur + 0.02);
   }
-  noise(t, { dur = 0.2, vol = 0.3, f0 = 2000, f1 = f0, q = 1, type = 'bandpass' } = {}) {
+  noise(t, { dur = 0.2, vol = 0.3, f0 = 2000, f1 = f0, q = 1, type = 'bandpass', out = this.master } = {}) {
     const s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
     s.buffer = this.noiseBuf;
     s.playbackRate.value = 0.5 + Math.random();
@@ -44,7 +44,7 @@ export class Sfx {
     f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f).connect(g).connect(this.master);
+    s.connect(f).connect(g).connect(out);
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
   }
 }

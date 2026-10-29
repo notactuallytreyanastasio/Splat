@@ -17,17 +17,20 @@ export class Hud {
       <div class="end"></div>
       <div class="vignette"></div>
       <div class="title"><h1>PASTEL GARDEN<br>MASSACRE</h1><h2>a very pretty place to make a mess</h2>
-        <div class="keys"><b>WASD</b> move <b>mouse</b> aim <b>LMB</b> slash combo <b>RMB</b> batter-up <b>E</b> grab &amp; throw <b>SPACE</b> roll <b>Q</b> rainbow blender <b>R</b> potion <b>SHIFT</b> parry <b>TAB</b> lock</div>
+        <div class="keys"><b>WASD</b> move <b>mouse</b> aim <b>LMB</b> slash combo <b>RMB</b> batter-up <b>E</b> grab &amp; throw <b>SPACE</b> roll <b>Q</b> rainbow blender <b>R</b> potion <b>SHIFT</b> parry <b>TAB</b> lock <b>M</b> sound</div>
         <p class="tip">anything you hit hard enough becomes a projectile. so do the bodies.</p>
         <button>click to start squishing</button>
         <div class="modes"><button class="coop" type="button">host co-op</button><form class="join"><input name="code" placeholder="room code" maxlength="12"><button type="submit">join</button></form></div>
         <small>gamepad works too · up to 4 knights in co-op</small></div>
+      <button class="audio" type="button" aria-label="sound">♪</button>
       <div class="cue"><i></i><b>!</b></div>
       <div class="roster"></div>
       <div class="tags"></div>
       <div class="help">WASD move · mouse aim · LMB slash · RMB batter-up · E grab/throw · SPACE dodge · Q blender · R potion</div>`;
     this.$ = s => root.querySelector(s);
     this.tags = new Map();
+    this.$('.audio').onclick = e => { e.stopPropagation(); this.g.cycleAudio(); };
+    this.audioIcon(game.audioMode);
     this.bannerT = 0;
   }
   update(dt) {
@@ -64,6 +67,7 @@ export class Hud {
     const i = view.renderer.info.render;
     (this.perfEl ??= Object.assign(document.body.appendChild(document.createElement('div')), { className: 'perf' })).textContent = `${(1000 / view.frameMs).toFixed(0)} fps · ${i.calls} calls · ${(i.triangles / 1000).toFixed(0)}k tris · x${view.ratio.toFixed(2)}`;
   }
+  audioIcon(mode) { const b = this.$('.audio'); b.textContent = { all: '♪', sfx: '🔈', off: '🔇' }[mode] ?? '♪'; b.classList.toggle('muted', mode !== 'all'); }
   roster() { this.rosterDirty = true; }
   updateCoop() {
     const g = this.g, list = [g.player, ...g.coop.remotes.values()];

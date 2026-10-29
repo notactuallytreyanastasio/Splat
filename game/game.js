@@ -14,6 +14,8 @@ import { Events } from '../engine/core/events.js';
 import { World } from '../engine/world/world.js';
 import { FlowField } from '../engine/ai/flowfield.js';
 import { Sfx } from '../engine/audio/sfx.js';
+import { Music } from '../engine/audio/music.js';
+import { defineMusic } from './music.js';
 import { Floaters } from '../engine/ui/floaters.js';
 import { TouchControls } from '../engine/ui/touch.js';
 import { parseLevel, buildLevelMeshes } from './level.js';
@@ -45,6 +47,9 @@ export class Game {
     this.input = new Input(this.view.renderer.domElement);
     this.sfx = new Sfx();
     defineSounds(this.sfx);
+    this.music = new Music(this.sfx);
+    defineMusic(this.music);
+    this.audioMode = (() => { try { return localStorage.getItem('audio') || 'all'; } catch { return 'all'; } })();
     const unlock = () => this.sfx.unlock();
     addEventListener('pointerdown', unlock); addEventListener('keydown', unlock);
     this.events = new Events();
@@ -102,7 +107,33 @@ export class Game {
   }
   begin() {
     document.body.classList.add('playing');
+    this.applyAudioMode();
     if (!this.guest) this.fx('bn', { t: 'THE PASTEL GARDEN', s: this.net ? 'squish every pretty thing, together' : 'squish every pretty thing' }); }
+  // all -> sfx only -> silent. Remembered per browser.
+  cycleAudio() {
+    this.audioMode = { all: 'sfx', sfx: 'off', off: 'all' }[this.audioMode];
+    try { localStorage.setItem('audio', this.audioMode); } catch {}
+    this.applyAudioMode();
+    this.hud.banner('', { all: 'music + sound', sfx: 'sound only', off: 'silent' }[this.audioMode], 1.2);
+  }
+  applyAudioMode() {
+    this.sfx.unlock();
+    if (this.sfx.master) this.sfx.master.gain.value = this.audioMode === 'off' ? 0 : this.sfx.volume;
+    if (this.audioMode === 'all') this.music.play('garden'); else this.music.stop();
+    this.hud.audioIcon?.(this.audioMode);
+  }
+  // Music follows the fight: calm while exploring, full band in a locked room, her own
+  // tune for the Empress, a little fanfare at the end.
+  updateMusic(dt) {
+    if (this.audioMode !== 'all' || !this.music.song) return;
+    const room = this.level.rooms[this.currentRoom];
+    const fighting = this.level.rooms.some(r => r.active);
+    const boss = this.boss && !this.boss.dead;
+    this.music.play(this.state === 'win' ? 'victory' : boss ? 'empress' : 'garden');
+    const target = this.state === 'dead' ? 0 : fighting ? 1 : 0.15;
+    this.music.intensity += (target - this.music.intensity) * Math.min(1, dt * 1.5);
+    this.music.setVolume(this.state === 'dead' ? 0.12 : this.player.hp < this.player.stats.maxHp * 0.25 ? 0.22 : 0.32);
+  }
   get players() { return [this.player, ...(this.coop?.remotes.values() ?? [])].filter(p => !p.dead); }
   nearestPlayer(x, z) {
     let best = null, bd = Infinity;
@@ -775,6 +806,7 @@ export class Game {
     it.potion = i.tapped('KeyR');
     it.parry = i.tapped('ShiftLeft', 'ShiftRight', 'KeyC', 'Mouse3');
     it.lockNext = i.tapped('Tab');
+    if (i.tapped('KeyM')) this.cycleAudio();
     for (let k = 0; k < 3; k++) if (i.tapped('Digit' + (k + 1))) it.choose = k;
     this.gamepad(it);
     this.touchIntent(it);
@@ -850,6 +882,7 @@ export class Game {
       }
     }
     this.coop?.update(dt);
+    this.updateMusic(dt);
     this.gore.update(dt);
     this.streakT -= dt;
     if (this.streakT <= 0 && this.streak) { this.streak = 0; this.fx('st', { n: 0 }); }
