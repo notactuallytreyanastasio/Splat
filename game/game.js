@@ -208,6 +208,13 @@ export class Game {
       }
       for (const r of this.level.rooms) {
         if (!r.active) continue;
+        // Late joiners (and anyone who slipped out) are pulled into the fight: the gates are shut.
+        const inside = this.players.find(k => !k.ghost && this.roomOf(k) === r.id);
+        if (inside) for (const k of this.players) if (!k.ghost && this.roomOf(k) !== r.id && (k.pullT = (k.pullT ?? 0) + dt) > 1) {
+          k.pullT = 0;
+          const x = inside.x + fx.f(-0.6, 0.6), z = inside.z + fx.f(-0.6, 0.6);
+          if (k.remote) this.fx('tp', { to: k.pid, x, z }); else { k.x = x; k.z = z; }
+        }
         r.enemies = r.enemies.filter(e => !e.dead);
         if (r.enemies.length === 0) {
           if (r.waves.length) this.spawnWave(r, r.waves.shift());
@@ -336,6 +343,7 @@ export class Game {
     if ((big || d.c) && mine) this.view.kick(0.03);
     this.sfx.play('hit', { pitch: d.kind === 'heavy' ? 0.6 : d.c ? 1.3 : 0.9 + Math.random() * 0.3 });
     this.floaters.spawn(d.c ? d.a + '!' : '' + d.a, t.x, (t.rig?.height ?? 1) + 0.4, t.z, { cls: d.c ? 'crit' : d.kind === 'impact' ? 'impact' : mine ? '' : 'ally', scale: Math.min(2, 0.8 + d.a / 40) });
+    if (d.src === this.localId && this.guest) { this.telemetry.c.hits++; this.telemetry.c.dealt += d.a; }
     if (d.src === this.localId) {
       // The blender cannot refuel itself, and throws/pinballs fill it fastest: rage rewards the core mechanic.
       const p = this.player, rate = d.kind === 'whirl' ? 0 : d.kind === 'impact' || d.kind === 'wall' ? 0.5 : 0.2;
