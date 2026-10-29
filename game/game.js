@@ -132,6 +132,8 @@ export class Game {
     this.music.play(this.state === 'win' ? 'victory' : boss ? 'empress' : 'garden');
     const target = this.state === 'dead' ? 0 : fighting ? 1 : 0.15;
     this.music.intensity += (target - this.music.intensity) * Math.min(1, dt * 1.5);
+    // Combat heat (or the noir peak, which the blender reaches without heat) drives the machine.
+    this.music.heat = this.state === 'play' ? Math.max(this.heat ?? 0, this.view.grade.noir * 1.1) : 0;
     this.music.setVolume(this.state === 'dead' ? 0.12 : this.player.hp < this.player.stats.maxHp * 0.25 ? 0.22 : 0.32);
   }
   get players() { return [this.player, ...(this.coop?.remotes.values() ?? [])].filter(p => !p.dead); }
