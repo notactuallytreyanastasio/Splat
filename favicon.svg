@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- a ladybug with a heart on its back and one drop of blood -->
+  <path d="M50 49c2 4 1 8-2 9s-5-2-4-5 4-6 6-4z" fill="#d4002e" stroke="#3a2346" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="32" cy="35" rx="22" ry="20" fill="#ff8fb8" stroke="#3a2346" stroke-width="4"/>
+  <path d="M32 16v39" stroke="#3a2346" stroke-width="3"/>
+  <circle cx="32" cy="15" r="9" fill="#6b4682" stroke="#3a2346" stroke-width="4"/>
+  <circle cx="28.5" cy="14" r="3" fill="#fff"/><circle cx="35.5" cy="14" r="3" fill="#fff"/>
+  <circle cx="29" cy="14.5" r="1.4" fill="#ff2d6f"/><circle cx="36" cy="14.5" r="1.4" fill="#ff2d6f"/>
+  <path d="M21 34c-3-4 2-8 5-4 3-4 8 0 5 4l-5 5z" fill="#fff" stroke="#3a2346" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="42" cy="30" r="3.5" fill="#fff" stroke="#3a2346" stroke-width="2"/>
+  <circle cx="40" cy="44" r="3" fill="#fff" stroke="#3a2346" stroke-width="2"/>
+</svg>

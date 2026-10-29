@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>og</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  /* Composes the social card from two frozen frames of the same moment:
+     the pastel garden on the left, the noir rage on the right. */
+  html, body { margin: 0; }
+  .card { position: relative; width: 1200px; height: 630px; overflow: hidden; background: #ffe9f6; font-family: Fredoka, sans-serif; }
+  .shot { position: absolute; inset: 0; background-size: cover; background-position: 50% 58%; }
+  .color { background-image: url(out/og-color.png); }
+  .noir { background-image: url(out/og-noir.png); clip-path: polygon(64% 0, 100% 0, 100% 100%, 44% 100%); }
+  .seam { position: absolute; inset: 0; clip-path: polygon(63.4% 0, 64.6% 0, 44.6% 100%, 43.4% 100%); background: #3a2346; }
+  .logo { position: absolute; left: 46px; top: 34px; transform: rotate(-4deg); }
+  .logo h1 { margin: 0; font-size: 170px; line-height: .9; color: #fff; -webkit-text-stroke: 18px #3a2346; paint-order: stroke fill; letter-spacing: 4px;
+    text-shadow: 0 10px 0 #3a2346; }
+  .logo h1 span { color: #ff8fb8; }
+  .logo h2 { margin: 10px 0 0 8px; font-size: 40px; color: #ff5fa2; -webkit-text-stroke: 8px #3a2346; paint-order: stroke fill; }
+  .tag { position: absolute; left: 50px; bottom: 34px; font-size: 30px; font-weight: 700; color: #fff; -webkit-text-stroke: 7px #3a2346; paint-order: stroke fill; }
+  .drop { position: absolute; left: 520px; top: 46px; width: 60px; }
+</style></head>
+<body><div class="card">
+  <div class="shot color"></div><div class="seam"></div><div class="shot noir"></div>
+  <div class="logo"><h1>SPL<span>A</span>T</h1><h2>pastel garden massacre</h2></div>
+  <svg class="drop" viewBox="0 0 30 40"><path d="M15 2C9 13 4 19 4 26a11 11 0 0 0 22 0C26 19 21 13 15 2z" fill="#d4002e" stroke="#3a2346" stroke-width="3.5" stroke-linejoin="round"/><ellipse cx="11" cy="25" rx="3" ry="5" fill="#ff7b9a"/></svg>
+  <div class="tag">everything you hit becomes a projectile</div>
+</div></body></html>

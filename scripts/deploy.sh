@@ -31,6 +31,7 @@ stage_tree "$STAGE"
 stage_tree "$STAGE/v/$REV"
 mkdir -p "$STAGE/tools"
 cp tools/models.html "$STAGE/tools/"
+cp og.png favicon.svg apple-touch-icon.png "$STAGE/"
 for page in index.html editor.html; do
   sed -e "s#\./node_modules/#./v/$REV/node_modules/#g" \
       -e "s#\./game/main\.js#./v/$REV/game/main.js#" \
